@@ -17,18 +17,10 @@ void setup() {
 }
 
 void loop() {
-  if (Serial.available() > 0) {
-    speed_Roller = Serial.parseInt();
-    speed_Spool  = Serial.parseInt();
-
-    speed_Roller = constrain(speed_Roller, 0, 255);
-    speed_Spool  = constrain(speed_Spool, 0, 255);
-
-    Serial.print("Roller Speed: ");
-    Serial.print(speed_Roller);
-    Serial.print(" | Spool Speed: ");
-    Serial.println(speed_Spool);
-  }
+  Serial.print("Roller Speed: ");
+  Serial.print(speed_Roller);
+  Serial.print(" | Spool Speed: ");
+  Serial.println(speed_Spool);
 
   analogWrite(motorRollerPin, speed_Roller);
   analogWrite(motorSpoolPin, speed_Spool);
