@@ -101,7 +101,7 @@ void loop() {
     }
     
 
-    // Print serial data (non-blocking)
+ /*   // Print serial data (non-blocking)
     if (currentMillis - lastSerialPrintTime >= serialPrintInterval) {
         lastSerialPrintTime = currentMillis;
         
@@ -112,4 +112,5 @@ void loop() {
         Serial.print(" mm | Steps remaining: ");
         Serial.println(stepsRemaining);
     }
+    */
 }
