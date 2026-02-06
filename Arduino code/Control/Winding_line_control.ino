@@ -1,11 +1,19 @@
 //Stepper motor control for the filament guide on a leadscrew
+#include <Wire.h>
+#include <Adafruit_INA219.h>
 
-#define stepPin 3
+//two current sensors
+Adafruit_INA219 ina219_spool(0x40);
+Adafruit_INA219 ina219_roller(0x41);
+
+//pin setup
+#define motorRollerPin 3
+#define motorSpoolPin 11
+#define stepPin 7
 #define dirPin 4
 #define enablePin 5
 #define limitSwitchPin 2
-#define motorRollerPin 3
-#define motorSpoolPin 11
+
 
 #define stepSize 20.0 //degrees per step
 #define microsteps 16.0 //microsteps per full step
@@ -52,6 +60,25 @@ void setup() {
     pinMode(limitSwitchPin, INPUT_PULLUP);
     pinMode(motorRollerPin, OUTPUT);
     pinMode(motorSpoolPin, OUTPUT);
+    pinMode(motorRollerPin, OUTPUT);
+    pinMode(motorSpoolPin, OUTPUT);
+
+
+  // Initialize INA219 at 0x40
+  if (!ina219_spool.begin()) {
+    Serial.println("Failed to find INA219 at address 0x40");
+    while (1) {
+      delay(10);
+    }
+  }
+
+  // Initialize INA219 at 0x41
+  if (!ina219_roller.begin()) {
+    Serial.println("Failed to find INA219 at address 0x41");
+    while (1) {
+      delay(10);
+    }
+  }
 
     digitalWrite(dirPin, LOW); // Set direction towards the limit switch
     digitalWrite(enablePin, HIGH); // Enable the stepper driver
@@ -72,6 +99,9 @@ void setup() {
 }
 
 void loop() {
+    float current_spool_mA = ina219_spool.getCurrent_mA();
+    float current_roller_mA = ina219_roller.getCurrent_mA();
+
     unsigned long currentMillis = millis();
     unsigned long currentMicros = micros();
     
@@ -106,37 +136,5 @@ void loop() {
                 guidePosition -= leadScrewPitch / stepsPerRevolution; // Update guide position
             }
     }
-    
-
- /*   // Print serial data (non-blocking)
-    if (currentMillis - lastSerialPrintTime >= serialPrintInterval) {
-        lastSerialPrintTime = currentMillis;
-        
-        Serial.print("Layer: ");
-        Serial.print(layerNumber);
-        Serial.print(" | Guide Position: ");
-        Serial.print(guidePosition);
-        Serial.print(" mm | Steps remaining: ");
-        Serial.println(stepsRemaining);
     }
-    */
-}
-
-
-void loop() {
-  if (Serial.available() > 0) {
-    speed_Roller = Serial.parseInt();
-    speed_Spool  = Serial.parseInt();
-
-    speed_Roller = constrain(speed_Roller, 0, 255);
-    speed_Spool  = constrain(speed_Spool, 0, 255);
-
-    Serial.print("Roller Speed: ");
-    Serial.print(speed_Roller);
-    Serial.print(" | Spool Speed: ");
-    Serial.println(speed_Spool);
-  }
-
-  analogWrite(motorRollerPin, speed_Roller);
-  analogWrite(motorSpoolPin, speed_Spool);
 }
