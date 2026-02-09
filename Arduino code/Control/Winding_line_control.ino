@@ -37,8 +37,10 @@ int speed_Roller = 30;
 int speed_Spool = 20;
 double guidePosition = 0.0; //m, current position of the filament guide
 int layerNumber = 0; //current layer number, used for testing
+
 //Test parameters
 double speed = 0.05; //m/s
+double torqueFactor = 0.1; //example torque setpoint for testing(not NM)
 
 // Calibration variables
 float noLoadCurrent_Spool = 0.0; //mA, base no-load current for spool motor
@@ -47,7 +49,7 @@ float noLoadCurrent_Roller = 0.0; //mA, base no-load current for roller motor
 // Stepper timing variables
 int stepsRemaining = 0;
 int stepDirection = LOW;
-unsigned long microsPrev = 0;
+unsigned long microsPrevStep = 0;
 
 void setup() {
 
@@ -58,8 +60,10 @@ void setup() {
 
     pinModeSetup();
     initI2CPeripherals();
+
     // Run calibration 
     HomingAndCalibration(5000, 100); // Run calibration for 5 seconds per motor, sampling every 100 ms
+    
 }
 
 void loop() {
@@ -68,43 +72,49 @@ void loop() {
 
     unsigned long currentMillis = millis();
     unsigned long microsCurrent = micros();
+
+    stepperControl(microsCurrent, speed);
     
-    double spoolOmega = speed / (spoolRadius+layerNumber*filamentDiameter); // Calculate angular speed of the spool
-    double guideOmega = spoolOmega * ratio; // Calculate the required angular speed of the guide
-    double stepperSpeed = guideOmega/(2 * PI) * stepsPerRevolution; // Convert to steps per second
-    double stepIntervalSeconds = 1.0 / stepperSpeed; // Calculate interval between steps in seconds
-    long ApproachStepInterval = stepIntervalSeconds * 1000000; // Convert to microseconds
+
+}
+
+/// @brief 
+/// @param microsCurrent //current time in microseconds for timing control of the stepper motor
+/// @param filamentSpeed //desired filament speed in m/s, used to calculate the required stepper speed for the guide
+void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
+    double spoolOmega = filamentSpeed / (spoolRadius+layerNumber*filamentDiameter); // Calculate angular speed of the spool
+    double guideOmega = spoolOmega * ratio;                                 // Calculate the required angular speed of the guide
+    double stepperSpeed = guideOmega/(2.0 * PI) * stepsPerRevolution;       // Convert to steps per second
+    double stepIntervalSeconds = 1.0 / stepperSpeed;                        // Calculate interval between steps in seconds
 
     // Check if it's time to update the layer number and reverse direction
-    if (guidePosition >= guideMaxPosition) {
+    if (digitalRead(limitSwitchPin) == LOW) {                               // If limit switch is triggered, reverse direction
         layerNumber++;
-        stepDirection = !stepDirection; // Reverse direction for next layer
-        digitalWrite(dirPin, stepDirection); // Set direction
+        stepDirection = !stepDirection;                                     // Reverse direction for next layer
+        digitalWrite(dirPin, stepDirection);                                // Set direction
+        guidePosition = 0.0;                                                // Reset guide position to 0 when limit switch is triggered    
     }
-    else if (digitalRead(limitSwitchPin) == LOW) { // If limit switch is triggered, reverse direction
+    else if (guidePosition >= guideMaxPosition) {
         layerNumber++;
         stepDirection = !stepDirection; // Reverse direction for next layer
         digitalWrite(dirPin, stepDirection); // Set direction
-        guidePosition = 0.0; // Reset guide position to 0 when limit switch is triggered    
     }
 
     // Handle stepper motor movement (non-blocking)
-    
-    if (microsCurrent - microsPrev >= ApproachStepInterval/2) { // Toggle step pin at half the interval for proper timing
+    if (microsCurrent - microsPrevStep >= stepIntervalSeconds/2) { // Toggle step pin at half the interval for proper timing
         digitalWrite(stepPin, !digitalRead(stepPin)); // Toggle step pin
-        microsPrev = microsCurrent;
+        microsPrevStep = microsCurrent;
         if (digitalRead(stepPin) == HIGH) { // Only count steps on the rising edge
             if (stepDirection == HIGH) {
                 guidePosition += leadScrewPitch / stepsPerRevolution; // Update guide position
             } else {
                 guidePosition -= leadScrewPitch / stepsPerRevolution; // Update guide position
             }
-    }
+        }
     }
 }
 
-
-
+/// @brief Initialize I2C peripherals (current sensors) and check for their presence. If a sensor is not found, print an error message and halt execution.
 void initI2CPeripherals() {
     Wire.begin();
   // Initialize INA219 at 0x40
@@ -124,6 +134,7 @@ void initI2CPeripherals() {
   }
 }
 
+/// @brief Set pin modes for stepper control, limit switch, and motor control pins.
 void pinModeSetup() {
     pinMode(stepPin, OUTPUT);
     pinMode(dirPin, OUTPUT);
@@ -134,7 +145,9 @@ void pinModeSetup() {
 }
 
 
-// Start non-blocking calibration (call once)
+/// @brief Perform homing and no-load current calibration for the filament guide system.
+/// @param calibrationTime_ms Duration in milliseconds for which to run the no-load current calibration. 
+/// @param sampleInterval_ms Interval in milliseconds between current samples during calibration.
 void HomingAndCalibration(int calibrationTime_ms = 5000, int sampleInterval_ms = 100) {
     Serial.println("Starting no-load current calibration and guide homing...");    
     // Non-blocking calibration state and functions
@@ -161,6 +174,7 @@ void HomingAndCalibration(int calibrationTime_ms = 5000, int sampleInterval_ms =
         unsigned long microsCurrent = micros();
 
         if (!calibrated){
+            // Sample current at regular intervals during calibration period
             if (millisCurrent - calibStartTime >= (unsigned long)calibrationTime_ms) {
                 calibrated = true;
                 noLoadCurrent_Spool = calib_spool_sum / calib_spool_samples;
@@ -172,6 +186,7 @@ void HomingAndCalibration(int calibrationTime_ms = 5000, int sampleInterval_ms =
                 Serial.print(noLoadCurrent_Roller);
                 Serial.println(" mA");
             }
+            // Accumulate current samples for calibration
             if (millisCurrent - millisPrev >= (unsigned long)sampleInterval_ms) {
                 calib_spool_sum += ina219_spool.getCurrent_mA();
                 calib_spool_samples++;
@@ -180,10 +195,10 @@ void HomingAndCalibration(int calibrationTime_ms = 5000, int sampleInterval_ms =
                 millisPrev = millisCurrent;
             }
         }
-
+        // Handle homing towards the limit switch
         if (!homed) {
             if (digitalRead(limitSwitchPin) == HIGH) { // If limit switch is not triggered, continue homing
-                if (microsCurrent - microsPrev >= ApproachStepInterval) {
+                if (microsCurrent - microsPrevStep >= ApproachStepInterval) {
                     digitalWrite(stepPin, !digitalRead(stepPin)); // Toggle step pin
                 }
             }
@@ -194,6 +209,6 @@ void HomingAndCalibration(int calibrationTime_ms = 5000, int sampleInterval_ms =
                 digitalWrite(stepPin, stepDirection); // Set direction for normal operation
             }
         }
-        microsPrev = microsCurrent;
+        microsPrevStep = microsCurrent;
     }
 }
