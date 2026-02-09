@@ -7,7 +7,7 @@ private:
   float integral;
   float previousError;
   unsigned long lastTime;
-  float outputMin, outputMax;
+  float outputMin, outputMax, output;
 
 public:
   // Constructor
@@ -21,6 +21,7 @@ public:
     lastTime = millis();
     outputMin = -255.0;
     outputMax = 255.0;
+    output = 0.0;
   }
 
   // Set PID tuning parameters
@@ -71,7 +72,7 @@ public:
     previousError = error;
 
     // Calculate output
-    float output = proportional + integral + derivative;
+    output = proportional + integral + derivative;
 
     // Limit output
     if (output > outputMax) output = outputMax;
