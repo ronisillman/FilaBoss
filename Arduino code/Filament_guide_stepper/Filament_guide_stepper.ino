@@ -26,7 +26,7 @@ double speed = 0.05; //m/s
 // Stepper timing variables
 int stepsRemaining = 0;
 int stepDirection = LOW;
-unsigned long microsPrev = 0;
+unsigned long microsPrevStep = 0;
 const unsigned long stepInterval = 1000; // microseconds between steps
 
 // Layer timing variables
@@ -50,12 +50,12 @@ void setup() {
     digitalWrite(enablePin, HIGH); // Enable the stepper driver
 
     // Home the stepper using clock-based timing
-    microsPrev = micros();
+    microsPrevStep = micros();
     while (digitalRead(limitSwitchPin) == HIGH) {
         unsigned long currentTime = micros();
-        if (currentTime - microsPrev >= stepInterval) {
+        if (currentTime - microsPrevStep >= stepInterval) {
             digitalWrite(stepPin, !digitalRead(stepPin)); // Toggle step pin
-            microsPrev = currentTime;
+            microsPrevStep = currentTime;
         }
     }
     
@@ -89,9 +89,9 @@ void loop() {
 
     // Handle stepper motor movement (non-blocking)
     
-    if (currentMicros - microsPrev >= stepInterval/2) { // Toggle step pin at half the interval for proper timing
+    if (currentMicros - microsPrevStep >= stepInterval/2) { // Toggle step pin at half the interval for proper timing
         digitalWrite(stepPin, !digitalRead(stepPin)); // Toggle step pin
-        microsPrev = currentMicros;
+        microsPrevStep = currentMicros;
         if (digitalRead(stepPin) == HIGH) { // Only count steps on the rising edge
             if (stepDirection == HIGH) {
                 guidePosition += leadScrewPitch / stepsPerRevolution; // Update guide position
