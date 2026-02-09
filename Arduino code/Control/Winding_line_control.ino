@@ -17,7 +17,8 @@ Roller.setOutputLimits(0, 255); // Set output limits for roller motor control (0
 #define stepPin 7
 #define dirPin 4
 #define enablePin 5
-#define limitSwitchPin 2
+#define limitSwitchPin 6
+#define encoderPin 2
 
 
 #define stepSize 20.0 //degrees per step
@@ -33,12 +34,16 @@ Roller.setOutputLimits(0, 255); // Set output limits for roller motor control (0
 #define filamentDiameter 0.00285 //m, diameter of the filament
 #define spoolWidth 0.045 //m, width of the filament spool
 #define ratio filamentDiameter/leadScrewPitch //gear ratio between spool and guide, set to 1 for direct drive
+#define rollerRadius 0.01 //m, radius of the roller in contact with the filament, used for speed calculation
+
+#define encoderResolution 20 //pulses per revolution for the encoder
 
 double guidePosition = 0.0; //m, current position of the filament guide
 int layerNumber = 0; //current layer number, used for testing
 
 //Test parameters
-double speed = 0.05; //m/s
+float targetSpeed = 0.02; //m/s, desired filament speed
+double speed = 0; //m/s
 double SetTorqueCurrent = 50; //mA, example torque setpoint for testing
 
 // Calibration variables
@@ -49,6 +54,13 @@ float noLoadCurrent_Roller = 0.0; //mA, base no-load current for roller motor
 int stepDirection = LOW;
 unsigned long microsPrevStep = 0;
 
+// Encoder variables for speed measurement
+
+volatile long pulseCount = 0;
+volatile bool lastState = LOW;
+unsigned long lastBounceTime = 0;
+
+
 void setup() {
 
     Serial.begin(9600);
@@ -56,7 +68,7 @@ void setup() {
         delay(10); // wait for serial port to connect. Needed for native USB port only
     }
 
-    pinModeSetup();
+    pinSetup();
     initI2CPeripherals();
 
     // Run calibration 
@@ -71,8 +83,9 @@ void loop() {
     stepperControl(microsCurrent, speed);
 
     // Placeholder for actual speed measurement from encoder or other sensor, using current as a proxy for testing
-    float measureSpeed = (ina219_roller.getCurrent_mA()/noLoadCurrent_Roller);
-    motorControl(speed, measureSpeed);
+    //float measureSpeed = (ina219_roller.getCurrent_mA()/noLoadCurrent_Roller);
+
+    motorControl(targetSpeed, speed);
     
 }
 
@@ -90,8 +103,8 @@ void motorControl(float setSpeed, float actualSpeed) {
     float error_roller = setSpeed - actualSpeed; // For the roller, we can use speed error directly for control
 
     // Update PID controllers
-    int controlSignal_Spool = Spool.update(error_spool);
-    int controlSignal_Roller = Roller.update(error_roller);
+    int controlSignal_Spool = Spool.compute(error_spool);
+    int controlSignal_Roller = Roller.compute(error_roller);
 
     // Apply control signals to motors (using PWM for speed control)
     analogWrite(motorSpoolPin, controlSignal_Spool);
@@ -155,13 +168,16 @@ void initI2CPeripherals() {
 }
 
 /// @brief Set pin modes for stepper control, limit switch, and motor control pins.
-void pinModeSetup() {
+void pinSetup() {
     pinMode(stepPin, OUTPUT);
     pinMode(dirPin, OUTPUT);
     pinMode(enablePin, OUTPUT);
     pinMode(limitSwitchPin, INPUT_PULLUP);
     pinMode(motorRollerPin, OUTPUT);
     pinMode(motorSpoolPin, OUTPUT);
+    pinMode(encoderPin, INPUT);
+
+    attachInterrupt(digitalPinToInterrupt(encoderPin), countPulse, CHANGE);
 }
 
 /// @brief Perform homing and no-load current calibration for the filament guide system.
@@ -230,4 +246,21 @@ void HomingAndCalibration(int calibrationTime_ms = 5000, int sampleInterval_ms =
         }
         microsPrevStep = microsCurrent;
     }
+}
+
+/// @brief Interrupt service routine to count encoder pulses and calculate speed.
+void countPulse() {
+  unsigned long now = micros();  // micros() for better debounce resolution
+  unsigned long period = now - lastBounceTime;
+
+// Debounce with 1000µs (1ms) threshold
+  if (period >= 1000) {
+    bool state = digitalRead(encoderPin);
+    if (state == HIGH && lastState == LOW) {
+      pulseCount++;
+      speed = 2*PI*rollerRadius*1000000.0/(encoderResolution*period); // Calculate speed in m/s based on pulses and time, from miocros to seconds conversion
+    }
+    lastState = state;
+    lastBounceTime = now;
+  }
 }
