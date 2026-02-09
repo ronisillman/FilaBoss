@@ -6,8 +6,10 @@
 //two current sensors
 Adafruit_INA219 ina219_spool(0x40);
 Adafruit_INA219 ina219_roller(0x41);
-PID Spool (0.5, 0.1, 0.05, 0.0, -255, 255); // Initialize PID controller with example gains and limits
-PID Roller (0.5, 0.1, 0.05, 0.0, -255, 255); // Initialize PID controller with example gains and limits
+PID Spool (0.5, 0.1, 0.05); // Initialize PID controller with example gains and limits
+Spool.setOutputLimits(0, 255); // Set output limits for spool motor control (0-255 for PWM)
+PID Roller (0.5, 0.1, 0.05); // Initialize PID controller with example gains and limits
+Roller.setOutputLimits(0, 255); // Set output limits for roller motor control (0-255 for PWM)
 
 //pin setup
 #define motorRollerPin 3
@@ -32,22 +34,18 @@ PID Roller (0.5, 0.1, 0.05, 0.0, -255, 255); // Initialize PID controller with e
 #define spoolWidth 0.045 //m, width of the filament spool
 #define ratio filamentDiameter/leadScrewPitch //gear ratio between spool and guide, set to 1 for direct drive
 
-
-int speed_Roller = 30;
-int speed_Spool = 20;
 double guidePosition = 0.0; //m, current position of the filament guide
 int layerNumber = 0; //current layer number, used for testing
 
 //Test parameters
 double speed = 0.05; //m/s
-double torqueFactor = 0.1; //example torque setpoint for testing(not NM)
+double SetTorqueCurrent = 50; //mA, example torque setpoint for testing
 
 // Calibration variables
 float noLoadCurrent_Spool = 0.0; //mA, base no-load current for spool motor
 float noLoadCurrent_Roller = 0.0; //mA, base no-load current for roller motor
 
 // Stepper timing variables
-int stepsRemaining = 0;
 int stepDirection = LOW;
 unsigned long microsPrevStep = 0;
 
@@ -67,15 +65,38 @@ void setup() {
 }
 
 void loop() {
-    float current_spool_mA = ina219_spool.getCurrent_mA();
-    float current_roller_mA = ina219_roller.getCurrent_mA();
-
     unsigned long currentMillis = millis();
     unsigned long microsCurrent = micros();
 
     stepperControl(microsCurrent, speed);
-    
 
+    // Placeholder for actual speed measurement from encoder or other sensor, using current as a proxy for testing
+    float measureSpeed = (ina219_roller.getCurrent_mA()/noLoadCurrent_Roller);
+    motorControl(speed, measureSpeed);
+    
+}
+
+/// @brief 
+/// @param setSpeed Desired speed for the roller motor in m/s, used to calculate the speed error for the PID controller.
+/// @param actualSpeed Actual speed of the roller motor in m/s, used to calculate the speed error for the PID controller.
+/// TODO: Implement cascaded control to prevent spool and roller speed missmatch
+void motorControl(float setSpeed, float actualSpeed) {
+
+    float current_spool_mA = ina219_spool.getCurrent_mA();
+; // technically unnecessary to measure roller current for speed control, but can be used for monitoring or future torque control of the roller
+
+    // Calculate error from no-load current
+    float torqueCurrent = current_spool_mA - noLoadCurrent_Spool*Spool.getOutput()/255.0; // Subtract scaled no-load current from actual current to get torque-related current for spool
+    float error_spool = SetTorqueCurrent - torqueCurrent; // Use torque-related current error for spool control
+    float error_roller = setSpeed - actualSpeed; // For the roller, we can use speed error directly for control
+
+    // Update PID controllers
+    int controlSignal_Spool = Spool.update(error_spool);
+    int controlSignal_Roller = Roller.update(error_roller);
+
+    // Apply control signals to motors (using PWM for speed control)
+    analogWrite(motorSpoolPin, controlSignal_Spool);
+    analogWrite(motorRollerPin, controlSignal_Roller);
 }
 
 /// @brief 
@@ -143,7 +164,6 @@ void pinModeSetup() {
     pinMode(motorRollerPin, OUTPUT);
     pinMode(motorSpoolPin, OUTPUT);
 }
-
 
 /// @brief Perform homing and no-load current calibration for the filament guide system.
 /// @param calibrationTime_ms Duration in milliseconds for which to run the no-load current calibration. 
