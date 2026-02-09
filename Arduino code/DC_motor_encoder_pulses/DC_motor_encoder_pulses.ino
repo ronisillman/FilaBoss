@@ -3,19 +3,11 @@
 volatile long pulseCount = 0;
 volatile bool lastState = LOW;
 
-const int motorRollerPin = 3;
-const int motorSpoolPin = 11;
-
-int speed_Roller = 20;
-int speed_Spool = 15;
-
 void setup() {
   pinMode(encoderPin, INPUT);
   Serial.begin(9600);
 
   attachInterrupt(digitalPinToInterrupt(encoderPin), countPulse, CHANGE);
-  analogWrite(motorRollerPin, speed_Roller);
-  analogWrite(motorSpoolPin, speed_Spool);
 }
 
 void loop() {
