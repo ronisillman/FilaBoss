@@ -6,9 +6,9 @@
 //two current sensors
 Adafruit_INA219 ina219_spool(0x40);
 Adafruit_INA219 ina219_roller(0x41);
-PID Spool (0.5, 0.1, 0.05); // Initialize PID controller with example gains and limits
+PID Spool (0.5, 0.1, 0.05); // Initialize PID controller with example gains
 Spool.setOutputLimits(0, 255); // Set output limits for spool motor control (0-255 for PWM)
-PID Roller (0.5, 0.1, 0.05); // Initialize PID controller with example gains and limits
+PID Roller (0.5, 0.1, 0.05); // Initialize PID controller with example gains
 Roller.setOutputLimits(0, 255); // Set output limits for roller motor control (0-255 for PWM)
 
 //pin setup
@@ -83,7 +83,6 @@ void loop() {
 void motorControl(float setSpeed, float actualSpeed) {
 
     float current_spool_mA = ina219_spool.getCurrent_mA();
-; // technically unnecessary to measure roller current for speed control, but can be used for monitoring or future torque control of the roller
 
     // Calculate error from no-load current
     float torqueCurrent = current_spool_mA - noLoadCurrent_Spool*Spool.getOutput()/255.0; // Subtract scaled no-load current from actual current to get torque-related current for spool
