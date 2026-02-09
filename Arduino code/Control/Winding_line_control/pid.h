@@ -46,10 +46,11 @@ public:
   float compute(float feedback) {
     unsigned long currentTime = millis();
     float deltaTime = (currentTime - lastTime) / 1000.0; // Convert to seconds
-    lastTime = currentTime;
 
-    // Avoid division by zero
-    if (deltaTime == 0) return 0;
+    // Avoid division by zero - return previous output if no time has passed
+    if (deltaTime == 0) return output;
+    
+    lastTime = currentTime;
 
     // Calculate error
     float error = setpoint - feedback;

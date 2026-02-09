@@ -1,33 +1,29 @@
 //Stepper motor control for the filament guide on a leadscrew
 #include <Wire.h>
 #include <Adafruit_INA219.h>
-#include <pid.h>
+#include "pid.h"
 
 //two current sensors
 Adafruit_INA219 ina219_spool(0x40);
 Adafruit_INA219 ina219_roller(0x41);
-PID Spool (0.5, 0.1, 0.05); // Initialize PID controller with example gains
-Spool.setOutputLimits(0, 255); // Set output limits for spool motor control (0-255 for PWM)
-PID Roller (0.5, 0.1, 0.05); // Initialize PID controller with example gains
-Roller.setOutputLimits(0, 255); // Set output limits for roller motor control (0-255 for PWM)
+PID Spool(0.05, 0.15, 0.0); // Initialize PID controller with example gains
+PID Roller(0.5, 0.3, 0.0); // Initialize PID controller with example gains
 
 //pin setup
 #define motorRollerPin 3
 #define motorSpoolPin 11
-#define stepPin 7
-#define dirPin 4
+#define stepPin 9
+#define dirPin 8
 #define enablePin 5
 #define limitSwitchPin 6
-#define encoderPinA 8 // CLK pin
-#define encoderPinB 9 // DT pin
-#define encoderBtn 10 // SW pin
-
+#define encoderPinA 2 // CLK pin
+#define encoderPinB 4 // DT pin
 
 #define stepSize 20.0 //degrees per step
 #define microsteps 16.0 //microsteps per full step
 #define stepsPerRevolution 360.0/stepSize*microsteps
 #define leadScrewPitch 0.005 //m per revolution
-#define ApproachStepInterval = 1000; // microseconds between steps
+#define ApproachStepInterval 1000 // microseconds between steps
 
 #define stepsPerMM stepsPerRevolution/leadScrewPitch
 
@@ -36,21 +32,21 @@ Roller.setOutputLimits(0, 255); // Set output limits for roller motor control (0
 #define filamentDiameter 0.00285 //m, diameter of the filament
 #define spoolWidth 0.045 //m, width of the filament spool
 #define ratio filamentDiameter/leadScrewPitch //gear ratio between spool and guide, set to 1 for direct drive
-#define rollerRadius 0.01 //m, radius of the roller in contact with the filament, used for speed calculation
+#define rollerRadius 0.012 //m, radius of the roller in contact with the filament, used for speed calculation
 
-#define encoderResolution 20 //pulses per revolution for the encoder
+#define encoderResolution 30 //pulses per revolution for the encoder
 
 double guidePosition = 0.0; //m, current position of the filament guide
 int layerNumber = 0; //current layer number, used for testing
 
-//Test parameters
+//Test parameters   
 float targetSpeed = 0.02; //m/s, desired filament speed
-double speed = 0; //m/s
 double SetTorqueCurrent = 50; //mA, example torque setpoint for testing
 
 // Calibration variables
 float noLoadCurrent_Spool = 0.0; //mA, base no-load current for spool motor
 float noLoadCurrent_Roller = 0.0; //mA, base no-load current for roller motor
+double currentMeasurement_Spool = 0.0; //mA, current measurement for spool motor
 
 // Stepper timing variables
 int stepDirection = LOW;
@@ -62,8 +58,7 @@ int encoderPinA_prev;
 int encoderPinA_value;
 unsigned long encoderPrevTime = 0;
 bool bool_CW;
-
-
+double speed = 0.0; //m/s, current speed of the filament, calculated from encoder counts
 
 void setup() {
 
@@ -74,9 +69,13 @@ void setup() {
 
     pinSetup();
     initI2CPeripherals();
+    
+    // Set output limits for PID controllers
+    Spool.setOutputLimits(0, 127); // Set output limits for spool motor control (0-255 for PWM)
+    Roller.setOutputLimits(0, 127); // Set output limits for roller motor control (0-255 for PWM)
 
     // Run calibration 
-    HomingAndCalibration(5000, 100); // Run calibration for 5 seconds per motor, sampling every 100 ms
+    //HomingAndCalibration(5000, 100); // Run calibration for 5 seconds per motor, sampling every 100 ms
     encoderPinA_prev = digitalRead(encoderPinA);
     
 }
@@ -84,14 +83,16 @@ void setup() {
 void loop() {
     unsigned long currentMillis = millis();
     unsigned long microsCurrent = micros();
-
-    stepperControl(microsCurrent, speed);
+    countPulse(); // Update encoder count and calculate actual speed'
+    Serial.print("Measured Speed: ");
+    Serial.print(speed*1000.0);
+    Serial.print(" |");
+    //stepperControl(microsCurrent, speed);
 
     // Placeholder for actual speed measurement from encoder or other sensor, using current as a proxy for testing
     //float measureSpeed = (ina219_roller.getCurrent_mA()/noLoadCurrent_Roller);
 
     motorControl(targetSpeed, speed);
-    
 }
 
 /// @brief 
@@ -99,21 +100,35 @@ void loop() {
 /// @param actualSpeed Actual speed of the roller motor in m/s, used to calculate the speed error for the PID controller.
 /// TODO: Implement cascaded control to prevent spool and roller speed missmatch
 void motorControl(float setSpeed, float actualSpeed) {
-
-    float current_spool_mA = ina219_spool.getCurrent_mA();
+    
+    currentMeasurement_Spool -= (currentMeasurement_Spool - constrain(ina219_spool.getCurrent_mA(),0,1000))*0.1; // Simple low-pass filter to smooth current measurement for spool motor
+    Serial.print("Spool Current: ");
+    Serial.print(currentMeasurement_Spool);
+    Serial.print(" |");
 
     // Calculate error from no-load current
-    float torqueCurrent = current_spool_mA - noLoadCurrent_Spool*Spool.getOutput()/255.0; // Subtract scaled no-load current from actual current to get torque-related current for spool
-    float error_spool = SetTorqueCurrent - torqueCurrent; // Use torque-related current error for spool control
-    float error_roller = setSpeed - actualSpeed; // For the roller, we can use speed error directly for control
-
+    float torqueCurrent = currentMeasurement_Spool - noLoadCurrent_Spool*Spool.getOutput()/255.0; // Subtract scaled no-load current from actual current to get torque-related current for spool
+    Spool.setSetpoint(SetTorqueCurrent);
+    //Spool.setSetpoint(0.2);
+    Roller.setSetpoint(setSpeed);
+    Serial.print(setSpeed);
+    Serial.print(" |");
+    Serial.println(setSpeed);
     // Update PID controllers
-    int controlSignal_Spool = Spool.compute(error_spool);
-    int controlSignal_Roller = Roller.compute(error_roller);
-
+    int controlSignal_Spool = Spool.compute(currentMeasurement_Spool);
+    int controlSignal_Roller = Roller.compute(actualSpeed);
+    Serial.print("Spool Control Signal: ");
+    Serial.print(controlSignal_Spool);
+    Serial.print(" |");
+    Serial.print(" Roller Control Signal: ");
+    Serial.println(controlSignal_Roller);
     // Apply control signals to motors (using PWM for speed control)
-    analogWrite(motorSpoolPin, controlSignal_Spool);
-    analogWrite(motorRollerPin, controlSignal_Roller);
+    //analogWrite(motorSpoolPin, controlSignal_Spool);
+    int spd = 30; // Placeholder for testing, replace with controlSignal_Spool for actual control
+    analogWrite(motorRollerPin, spd);
+    analogWrite(motorSpoolPin, spd*(rollerRadius/spoolRadius)+12);
+    //analogWrite(motorRollerPin, controlSignal_Roller);
+    
 }
 
 /// @brief 
@@ -182,17 +197,16 @@ void pinSetup() {
     pinMode(motorSpoolPin, OUTPUT);
     pinMode (encoderPinA, INPUT);
     pinMode (encoderPinB, INPUT);
-    pinMode(encoderBtn, INPUT_PULLUP);
 }
 
 /// @brief Perform homing and no-load current calibration for the filament guide system.
 /// @param calibrationTime_ms Duration in milliseconds for which to run the no-load current calibration. 
 /// @param sampleInterval_ms Interval in milliseconds between current samples during calibration.
-void HomingAndCalibration(int calibrationTime_ms = 5000, int sampleInterval_ms = 100) {
+void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
     Serial.println("Starting no-load current calibration and guide homing...");    
     // Non-blocking calibration state and functions
     bool calibrated = false;
-    bool homed = false;
+    bool homed = true;
 
     unsigned long calibStartTime = millis();
     unsigned long millisPrev = 0;
@@ -263,12 +277,13 @@ void countPulse() {
         if (digitalRead(encoderPinB) != encoderPinA_value) {
             encoderCount ++;
             bool_CW = true;
-            speed = 2*PI*rollerRadius*1000000.0/(encoderResolution*period); // Calculate speed in m/s based on encoder counts and time period
+            speed -= (speed - 2.0*PI*rollerRadius*1000000.0/((float)encoderResolution*(float)period))/20.0; // Calculate speed in m/s based on encoder counts and time period
         } 
         else {
             // if pin B state changed before pin A, rotation is counter-clockwise
             bool_CW = false;
             encoderCount--;
+            speed -= (speed - 2.0*PI*rollerRadius*1000000.0/((float)encoderResolution*(float)period))/20.0; // Calculate speed in m/s based on encoder counts and time period
         }
         encoderPrevTime = currentTime;
     }
