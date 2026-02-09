@@ -18,7 +18,9 @@ Roller.setOutputLimits(0, 255); // Set output limits for roller motor control (0
 #define dirPin 4
 #define enablePin 5
 #define limitSwitchPin 6
-#define encoderPin 2
+#define encoderPinA 8 // CLK pin
+#define encoderPinB 9 // DT pin
+#define encoderBtn 10 // SW pin
 
 
 #define stepSize 20.0 //degrees per step
@@ -55,10 +57,12 @@ int stepDirection = LOW;
 unsigned long microsPrevStep = 0;
 
 // Encoder variables for speed measurement
+int encoderCount = 0;
+int encoderPinA_prev;
+int encoderPinA_value;
+unsigned long encoderPrevTime = 0;
+bool bool_CW;
 
-volatile long pulseCount = 0;
-volatile bool lastState = LOW;
-unsigned long lastBounceTime = 0;
 
 
 void setup() {
@@ -73,6 +77,7 @@ void setup() {
 
     // Run calibration 
     HomingAndCalibration(5000, 100); // Run calibration for 5 seconds per motor, sampling every 100 ms
+    encoderPinA_prev = digitalRead(encoderPinA);
     
 }
 
@@ -175,9 +180,9 @@ void pinSetup() {
     pinMode(limitSwitchPin, INPUT_PULLUP);
     pinMode(motorRollerPin, OUTPUT);
     pinMode(motorSpoolPin, OUTPUT);
-    pinMode(encoderPin, INPUT);
-
-    attachInterrupt(digitalPinToInterrupt(encoderPin), countPulse, CHANGE);
+    pinMode (encoderPinA, INPUT);
+    pinMode (encoderPinB, INPUT);
+    pinMode(encoderBtn, INPUT_PULLUP);
 }
 
 /// @brief Perform homing and no-load current calibration for the filament guide system.
@@ -250,17 +255,22 @@ void HomingAndCalibration(int calibrationTime_ms = 5000, int sampleInterval_ms =
 
 /// @brief Interrupt service routine to count encoder pulses and calculate speed.
 void countPulse() {
-  unsigned long now = micros();  // micros() for better debounce resolution
-  unsigned long period = now - lastBounceTime;
-
-// Debounce with 1000µs (1ms) threshold
-  if (period >= 1000) {
-    bool state = digitalRead(encoderPin);
-    if (state == HIGH && lastState == LOW) {
-      pulseCount++;
-      speed = 2*PI*rollerRadius*1000000.0/(encoderResolution*period); // Calculate speed in m/s based on pulses and time, from miocros to seconds conversion
+    unsigned long currentTime = micros();
+    unsigned long period = currentTime - encoderPrevTime; // Time since last pulse in microseconds
+    encoderPinA_value = digitalRead(encoderPinA);
+    if (encoderPinA_value != encoderPinA_prev) { // check if knob is rotating
+        // if pin A state changed before pin B, rotation is clockwise
+        if (digitalRead(encoderPinB) != encoderPinA_value) {
+            encoderCount ++;
+            bool_CW = true;
+            speed = 2*PI*rollerRadius*1000000.0/(encoderResolution*period); // Calculate speed in m/s based on encoder counts and time period
+        } 
+        else {
+            // if pin B state changed before pin A, rotation is counter-clockwise
+            bool_CW = false;
+            encoderCount--;
+        }
+        encoderPrevTime = currentTime;
     }
-    lastState = state;
-    lastBounceTime = now;
-  }
+    encoderPinA_prev = encoderPinA_value;
 }
