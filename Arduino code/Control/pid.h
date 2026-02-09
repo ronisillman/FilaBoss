@@ -97,4 +97,7 @@ public:
   float getIntegral() {
     return integral;
   }
+  float getOutput() {
+    return output;
+  }
 };
