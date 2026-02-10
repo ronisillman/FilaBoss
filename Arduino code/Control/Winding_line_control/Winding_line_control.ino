@@ -102,6 +102,9 @@ void loop() {
     motorControl(targetSpeed, speed);
     diagnose(1000); // Print diagnostics every 1000 ms (1 second)
 }
+
+/// @brief Print diagnostic information to the serial monitor at a specified interval
+/// @param interval The interval in milliseconds between diagnostic prints
 void diagnose(unsigned long interval) {
     unsigned long currentMillis = millis();
     if (currentMillis - lastDiagnoseTime >= interval) { // Print diagnostics every 1 second
@@ -313,9 +316,8 @@ void countPulse() {
     encoderPinA_prev = encoderPinA_value;
 }
 
+/// @brief Update current measurements from INA219 sensors and apply a low-pass filter to smooth the readings.
 void updateMeasurements() {
     currentMeasurement_Spool -= (currentMeasurement_Spool - constrain(ina219_spool.getCurrent_mA(),0,1000))*CurrentfilterAlpha; // Simple low-pass filter to smooth current measurement for spool motor
     currentMeasurement_Roller -= (currentMeasurement_Roller - constrain(ina219_roller.getCurrent_mA(),0,1000))*CurrentfilterAlpha; // Simple low-pass filter to smooth current measurement for roller motor
-
-    // Placeholder for measurement function, can be expanded to include additional sensors or processing as needed
 }
