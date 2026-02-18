@@ -18,6 +18,7 @@ PID RollerPID(1000, 0.3, 0.0); // Initialize PID controller with example gains
 #define limitSwitchPin 6
 #define encoderPinA 2 // CLK pin
 #define encoderPinB 4 // DT pin
+#define potPin A3 // Potentiometer for testing speed control
 
 #define stepSize 20.0 //degrees per step
 #define microsteps 16.0 //microsteps per full step
@@ -98,7 +99,7 @@ void loop() {
 
     // Placeholder for actual speed measurement from encoder or other sensor, using current as a proxy for testing
     //float measureSpeed = (ina219_roller.getCurrent_mA()/noLoadCurrent_Roller);
-
+    potSpeedControl(); // Update target speed based on potentiometer reading
     motorControl(targetSpeed, speed);
     diagnose(1000); // Print diagnostics every 1000 ms (1 second)
 }
@@ -218,6 +219,7 @@ void pinSetup() {
     pinMode(motorSpoolPin, OUTPUT);
     pinMode (encoderPinA, INPUT);
     pinMode (encoderPinB, INPUT);
+    pinMode(potPin, INPUT);
 }
 
 /// @brief Perform homing and no-load current calibration for the filament guide system.
@@ -320,4 +322,9 @@ void countPulse() {
 void updateMeasurements() {
     currentMeasurement_Spool -= (currentMeasurement_Spool - constrain(ina219_spool.getCurrent_mA(),0,1000))*CurrentfilterAlpha; // Simple low-pass filter to smooth current measurement for spool motor
     currentMeasurement_Roller -= (currentMeasurement_Roller - constrain(ina219_roller.getCurrent_mA(),0,1000))*CurrentfilterAlpha; // Simple low-pass filter to smooth current measurement for roller motor
+}
+
+void potSpeedControl() {
+    int potValue = analogRead(potPin); // Read potentiometer value (0-1023)
+    targetSpeed = (potValue / 1023.0) * 0.1; // Map to desired speed range (0-0.05 m/s)
 }
