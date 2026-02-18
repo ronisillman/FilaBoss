@@ -35,7 +35,8 @@ PID RollerPID(1000, 0.3, 0.0); // Initialize PID controller with example gains
 #define ratio filamentDiameter/leadScrewPitch //gear ratio between spool and guide, set to 1 for direct drive
 #define rollerRadius 0.012 //m, radius of the roller in contact with the filament, used for speed calculation
 
-#define encoderResolution 30.0 //pulses per revolution for the encoder
+//#define encoderResolution 30.0 //pulses per revolution for the 
+#define encoderResolution 600.0 //pulses per revolution for the encoder, used for speed calculation
 
 
 // Filter variables for measurment smoothing
@@ -67,6 +68,17 @@ unsigned long encoderPrevTime = 0;
 bool bool_CW;
 double speed = 0.0; //m/s, current speed of the filament, calculated from encoder counts
 
+//Testing new speed measurement
+volatile long encoderTicks = 0;
+volatile uint8_t lastAState = 0;
+unsigned long speedSamplePrevMs = 0;
+long prevTicksForSpeed = 0;
+const uint8_t speedAvgWindowSize = 6;
+float speedAvgWindow[speedAvgWindowSize] = {0.0f};
+uint8_t speedAvgIndex = 0;
+uint8_t speedAvgCount = 0;
+
+// Diagnostic timing variable
 unsigned long lastDiagnoseTime = 0;
 unsigned long lastEncoderPeriod = 0;
 
@@ -88,12 +100,20 @@ void setup() {
     //HomingAndCalibration(5000, 100); // Run calibration for 5 seconds per motor, sampling every 100 ms
     encoderPinA_prev = digitalRead(encoderPinA);
     
+    //New speed mesurement test
+    lastAState = digitalRead(encoderPinA);
+    attachInterrupt(digitalPinToInterrupt(encoderPinA), encoderISR, CHANGE);
+    speedSamplePrevMs = millis();
+    for (uint8_t i = 0; i < speedAvgWindowSize; i++) {
+        speedAvgWindow[i] = 0.0f;
+    }
 }
 
 void loop() {
     unsigned long currentMillis = millis();
     unsigned long microsCurrent = micros();
-    countPulse(); // Update encoder count and calculate actual speed'
+    //countPulse(); // Update encoder count and calculate actual speed'
+    updateSpeedEstimate(); // New speed measurement testing
 
     //stepperControl(microsCurrent, speed);
 
@@ -110,10 +130,10 @@ void diagnose(unsigned long interval) {
     unsigned long currentMillis = millis();
     if (currentMillis - lastDiagnoseTime >= interval) { // Print diagnostics every 1 second
         lastDiagnoseTime = currentMillis;
-        Serial.print("Filament Speed(m/s): ");
+        Serial.print("Filament Speed(mm/s): ");
         Serial.print(speed*1000.0);
-        Serial.print(" | Set Speed(m/s): ");
-        Serial.print(targetSpeed);
+        Serial.print(" | Set Speed(mm/s): ");
+        Serial.print(targetSpeed*1000.0);
         Serial.print(" | Spool Current(mA): ");
         Serial.print(currentMeasurement_Spool);
         Serial.print(" | Spool Control Signal: ");
@@ -139,17 +159,19 @@ void motorControl(float setSpeed, float actualSpeed) {
     SpoolPID.setSetpoint(SetTorqueCurrent);
     //SpoolPID.setSetpoint(0.2);
     RollerPID.setSetpoint(setSpeed); // Set speed setpoint for roller PID (converted to mm/s for better resolution)
-    Serial.print(setSpeed);
-    Serial.print(" |");
-    Serial.println(setSpeed);
+    //Serial.print(setSpeed);
+    //Serial.print(" |");
+    //Serial.println(setSpeed);
     // Update PID controllers
     int controlSignal_Spool = SpoolPID.compute(currentMeasurement_Spool);
     int controlSignal_Roller = RollerPID.compute(actualSpeed); // Compute control signal for roller PID (converted to mm/s for better resolution)
     // Apply control signals to motors (using PWM for speed control)
     //analogWrite(motorSpoolPin, controlSignal_Spool);
-    int spd = 30; // Placeholder for testing, replace with controlSignal_Spool for actual control
+    //int spd = 30; // Placeholder for testing, replace with controlSignal_Spool for actual control
+    //int spd = controlSignal_Roller;
+    int spd = setSpeed*1000; // Placeholder for testing, replace with controlSignal_Spool for actual control
     analogWrite(motorRollerPin, spd);
-    analogWrite(motorSpoolPin, spd*(rollerRadius/spoolRadius)+12);
+    analogWrite(motorSpoolPin, spd*(rollerRadius/spoolRadius)*2.5);
     //analogWrite(motorRollerPin, controlSignal_Roller);
 }
 
@@ -217,8 +239,8 @@ void pinSetup() {
     pinMode(limitSwitchPin, INPUT_PULLUP);
     pinMode(motorRollerPin, OUTPUT);
     pinMode(motorSpoolPin, OUTPUT);
-    pinMode (encoderPinA, INPUT);
-    pinMode (encoderPinB, INPUT);
+    pinMode (encoderPinA, INPUT_PULLUP);
+    pinMode (encoderPinB, INPUT_PULLUP);
     pinMode(potPin, INPUT);
 }
 
@@ -309,9 +331,11 @@ void countPulse() {
             encoderCount--;
             lastEncoderPeriod = period;
             speed -= (speed + 2.0*PI*rollerRadius*1000000.0/((float)encoderResolution*(float)period))*SpeedFilterAlpha; // Calculate speed in m/s based on encoder counts and time period
+            speed = -speed;
         }
         if (period > lastEncoderPeriod) {
             speed -= (speed - 2.0*PI*rollerRadius*1000000.0/((float)encoderResolution*(float)period)); // If period exceeds max allowed
+            speed = -speed;
         }
         encoderPrevTime = currentTime;
     }
@@ -326,5 +350,64 @@ void updateMeasurements() {
 
 void potSpeedControl() {
     int potValue = analogRead(potPin); // Read potentiometer value (0-1023)
-    targetSpeed = (potValue / 1023.0) * 0.1; // Map to desired speed range (0-0.05 m/s)
+    targetSpeed = (potValue / 1023.0) * 0.05; // Map to desired speed range (0-0.05 m/s)
+}
+
+// New speed measurement test
+void encoderISR() {
+    uint8_t a = digitalRead(encoderPinA);
+    uint8_t b = digitalRead(encoderPinB);
+
+    if (a != lastAState) {
+        encoderTicks += (b != a) ? 1 : -1;  // quadrature direction
+        lastAState = a;
+    }
+}
+
+void updateSpeedEstimate() {
+    const unsigned long sampleMs = 250; // Longer window reduces quantization noise at low speeds
+    unsigned long now = millis();
+    if (now - speedSamplePrevMs < sampleMs) return;
+
+    noInterrupts();
+    long ticks = encoderTicks;
+    interrupts();
+
+    long deltaTicks = ticks - prevTicksForSpeed;
+    prevTicksForSpeed = ticks;
+
+    float dt = (now - speedSamplePrevMs) / 1000.0f;
+    speedSamplePrevMs = now;
+    if (dt <= 0.0f) return;
+
+    float revPerSec = ((float)deltaTicks / encoderResolution) / dt;
+    float rawSpeed = fabs(revPerSec * (2.0f * PI * rollerRadius)); // m/s magnitude
+
+    speedAvgWindow[speedAvgIndex] = rawSpeed;
+    speedAvgIndex = (speedAvgIndex + 1) % speedAvgWindowSize;
+    if (speedAvgCount < speedAvgWindowSize) {
+        speedAvgCount++;
+    }
+
+    float avgRawSpeed = 0.0f;
+    for (uint8_t i = 0; i < speedAvgCount; i++) {
+        avgRawSpeed += speedAvgWindow[i];
+    }
+    if (speedAvgCount > 0) {
+        avgRawSpeed /= speedAvgCount;
+    }
+
+    const float alpha = 0.25f;
+    speed += alpha * (avgRawSpeed - speed);
+    speed = fabs(speed);
+
+    if (deltaTicks == 0) {              // no pulses in window -> decay to zero
+        const float stopThreshold = 0.0002f; // 0.2 mm/s, keep very low-speed readings alive
+        float decayFactor = 0.94f;
+        if (targetSpeed < 0.015f) {
+            decayFactor = 0.98f; // much gentler decay for low-speed operation
+        }
+        speed *= decayFactor;
+        if (speed < stopThreshold) speed = 0.0f;
+    }
 }
