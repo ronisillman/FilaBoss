@@ -6,8 +6,11 @@
 //two current sensors
 Adafruit_INA219 ina219_spool(0x40);
 Adafruit_INA219 ina219_roller(0x41);
-PID SpoolPID(0.05, 0.15, 0.0); // Initialize PID controller with example gains
-PID RollerPID(1000, 0.3, 0.0); // Initialize PID controller with example gains
+//PID SpoolPID(0.05, 0.15, 0.0); // Initialize PID controller with example gains
+PID SpoolPID(7000, 2500, 5.0);
+//PID RollerPID(1000, 0.3, 0.0); // Initialize PID controller with example gains
+//PID RollerPID(4000, 80, 0.5);
+PID RollerPID(5000, 1500, 5.0);
  
 //pin setup
 #define motorRollerPin 3
@@ -19,6 +22,7 @@ PID RollerPID(1000, 0.3, 0.0); // Initialize PID controller with example gains
 #define encoderPinA 2 // CLK pin
 #define encoderPinB 4 // DT pin
 #define potPin A3 // Potentiometer for testing speed control
+#define potCurrentPin A2 // Potentiometer for target current control
 
 #define stepSize 20.0 //degrees per step
 #define microsteps 16.0 //microsteps per full step
@@ -33,14 +37,14 @@ PID RollerPID(1000, 0.3, 0.0); // Initialize PID controller with example gains
 #define filamentDiameter 0.00285 //m, diameter of the filament
 #define spoolWidth 0.045 //m, width of the filament spool
 #define ratio filamentDiameter/leadScrewPitch //gear ratio between spool and guide, set to 1 for direct drive
-#define rollerRadius 0.012 //m, radius of the roller in contact with the filament, used for speed calculation
+#define rollerRadius 0.0119 //m, radius of the roller in contact with the filament, used for speed calculation
 
 //#define encoderResolution 30.0 //pulses per revolution for the 
 #define encoderResolution 600.0 //pulses per revolution for the encoder, used for speed calculation
 
 
 // Filter variables for measurment smoothing
-#define CurrentfilterAlpha 0.1 // Smoothing factor for current measurements
+#define CurrentfilterAlpha 0.02 // Smoothing factor for current measurements
 #define SpeedFilterAlpha 0.1 // Smoothing factor for speed measurements
 
 double guidePosition = 0.0; //m, current position of the filament guide
@@ -73,7 +77,7 @@ volatile long encoderTicks = 0;
 volatile uint8_t lastAState = 0;
 unsigned long speedSamplePrevMs = 0;
 long prevTicksForSpeed = 0;
-const uint8_t speedAvgWindowSize = 6;
+const uint8_t speedAvgWindowSize = 3; // Reduced from 6 - high resolution encoder needs less averaging
 float speedAvgWindow[speedAvgWindowSize] = {0.0f};
 uint8_t speedAvgIndex = 0;
 uint8_t speedAvgCount = 0;
@@ -114,12 +118,14 @@ void loop() {
     unsigned long microsCurrent = micros();
     //countPulse(); // Update encoder count and calculate actual speed'
     updateSpeedEstimate(); // New speed measurement testing
+    updateMeasurements(); // Update current measurements from INA219 sensors
 
     //stepperControl(microsCurrent, speed);
 
     // Placeholder for actual speed measurement from encoder or other sensor, using current as a proxy for testing
     //float measureSpeed = (ina219_roller.getCurrent_mA()/noLoadCurrent_Roller);
     potSpeedControl(); // Update target speed based on potentiometer reading
+    potCurrentControl(); // Update target current based on potentiometer reading
     motorControl(targetSpeed, speed);
     diagnose(1000); // Print diagnostics every 1000 ms (1 second)
 }
@@ -130,7 +136,7 @@ void diagnose(unsigned long interval) {
     unsigned long currentMillis = millis();
     if (currentMillis - lastDiagnoseTime >= interval) { // Print diagnostics every 1 second
         lastDiagnoseTime = currentMillis;
-        Serial.print("Filament Speed(mm/s): ");
+/*         Serial.print("Filament Speed(mm/s): ");
         Serial.print(speed*1000.0);
         Serial.print(" | Set Speed(mm/s): ");
         Serial.print(targetSpeed*1000.0);
@@ -145,7 +151,16 @@ void diagnose(unsigned long interval) {
         Serial.print(" | Layer Number: ");
         Serial.print(layerNumber);
         // Add more diagnostic information as needed
-        Serial.println();
+        Serial.println(); */
+        // These four for PID plotting in the serial plotter
+        Serial.print("speed target:");
+        Serial.print(targetSpeed * 1000.0f);
+        Serial.print(" measured speed:");
+        Serial.print(speed * 1000.0f);
+        Serial.print(" target current:");
+        Serial.print(SetTorqueCurrent);
+        Serial.print(" measured current:");
+        Serial.println(currentMeasurement_Spool);
     }
 }
 
@@ -156,7 +171,7 @@ void diagnose(unsigned long interval) {
 void motorControl(float setSpeed, float actualSpeed) {
     // Calculate error from no-load current
     float torqueCurrent = currentMeasurement_Spool - noLoadCurrent_Spool*SpoolPID.getOutput()/255.0; // Subtract scaled no-load current from actual current to get torque-related current for spool
-    SpoolPID.setSetpoint(SetTorqueCurrent);
+    SpoolPID.setSetpoint(SetTorqueCurrent); // Set current setpoint for spool PID
     //SpoolPID.setSetpoint(0.2);
     RollerPID.setSetpoint(setSpeed); // Set speed setpoint for roller PID (converted to mm/s for better resolution)
     //Serial.print(setSpeed);
@@ -170,8 +185,9 @@ void motorControl(float setSpeed, float actualSpeed) {
     //int spd = 30; // Placeholder for testing, replace with controlSignal_Spool for actual control
     //int spd = controlSignal_Roller;
     int spd = setSpeed*1000; // Placeholder for testing, replace with controlSignal_Spool for actual control
-    analogWrite(motorRollerPin, spd);
-    analogWrite(motorSpoolPin, spd*(rollerRadius/spoolRadius)*2.5);
+    analogWrite(motorRollerPin, controlSignal_Roller);
+    //analogWrite(motorSpoolPin, spd*(rollerRadius/spoolRadius)*2.5); // This works great with only the spool PID, but with the roller PID
+    analogWrite(motorSpoolPin, controlSignal_Spool);
     //analogWrite(motorRollerPin, controlSignal_Roller);
 }
 
@@ -242,6 +258,7 @@ void pinSetup() {
     pinMode (encoderPinA, INPUT_PULLUP);
     pinMode (encoderPinB, INPUT_PULLUP);
     pinMode(potPin, INPUT);
+    pinMode(potCurrentPin, INPUT);
 }
 
 /// @brief Perform homing and no-load current calibration for the filament guide system.
@@ -353,6 +370,11 @@ void potSpeedControl() {
     targetSpeed = (potValue / 1023.0) * 0.05; // Map to desired speed range (0-0.05 m/s)
 }
 
+void potCurrentControl() {
+    int potValue = analogRead(potCurrentPin); // Read potentiometer value (0-1023)
+    SetTorqueCurrent = (potValue / 1023.0) * 200.0; // Map to desired current range (0-200 mA)
+}
+
 // New speed measurement test
 void encoderISR() {
     uint8_t a = digitalRead(encoderPinA);
@@ -365,7 +387,7 @@ void encoderISR() {
 }
 
 void updateSpeedEstimate() {
-    const unsigned long sampleMs = 250; // Longer window reduces quantization noise at low speeds
+    const unsigned long sampleMs = 75; // 600 PPR allows much faster sampling (was 250ms for 30 PPR)
     unsigned long now = millis();
     if (now - speedSamplePrevMs < sampleMs) return;
 
@@ -397,7 +419,7 @@ void updateSpeedEstimate() {
         avgRawSpeed /= speedAvgCount;
     }
 
-    const float alpha = 0.25f;
+    const float alpha = 0.45f; // More responsive with high-res encoder (was 0.25f)
     speed += alpha * (avgRawSpeed - speed);
     speed = fabs(speed);
 
