@@ -4,13 +4,13 @@
 #include "pid.h"
 
 //two current sensors
-Adafruit_INA219 ina219_spool(0x40);
-Adafruit_INA219 ina219_roller(0x41);
+Adafruit_INA219 ina219_spool(0x41);
+//Adafruit_INA219 ina219_roller(0x40);
 //PID SpoolPID(0.05, 0.15, 0.0); // Initialize PID controller with example gains
 PID SpoolPID(7000, 2500, 5.0);
 //PID RollerPID(1000, 0.3, 0.0); // Initialize PID controller with example gains
 //PID RollerPID(4000, 80, 0.5);
-PID RollerPID(5000, 1500, 5.0);
+PID RollerPID(2600, 120, 28);
  
 //pin setup
 #define motorRollerPin 3
@@ -92,13 +92,16 @@ void setup() {
     while (!Serial) {
         delay(10); // wait for serial port to connect. Needed for native USB port only
     }
-
+    Serial.println("Starting filament guide control system...");
     pinSetup();
+    Serial.println("Pins initialized.");
+    Serial.println("Initializing I2C peripherals...");
     initI2CPeripherals();
+    Serial.println("I2C peripherals initialized.");
     
     // Set output limits for PID controllers
-    SpoolPID.setOutputLimits(0, 127); // Set output limits for spool motor control (0-255 for PWM)
-    RollerPID.setOutputLimits(0, 127); // Set output limits for roller motor control (0-255 for PWM)
+    SpoolPID.setOutputLimits(0, 255); // Set output limits for spool motor control (0-255 for PWM)
+    RollerPID.setOutputLimits(0, 255); // Set output limits for roller motor control (0-255 for PWM)
 
     // Run calibration 
     //HomingAndCalibration(5000, 100); // Run calibration for 5 seconds per motor, sampling every 100 ms
@@ -230,21 +233,21 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
 /// @brief Initialize I2C peripherals (current sensors) and check for their presence. If a sensor is not found, print an error message and halt execution.
 void initI2CPeripherals() {
     Wire.begin();
-  // Initialize INA219 at 0x40
-  if (!ina219_spool.begin()) {
-    Serial.println("Failed to find INA219 at address 0x40");
-    while (1) {
-      delay(10);
-    }
-  }
-
   // Initialize INA219 at 0x41
-  if (!ina219_roller.begin()) {
+  if (!ina219_spool.begin()) {
     Serial.println("Failed to find INA219 at address 0x41");
     while (1) {
       delay(10);
     }
   }
+/* 
+  // Initialize INA219 at 0x40
+  if (!ina219_roller.begin()) {
+    Serial.println("Failed to find INA219 at address 0x40");
+    while (1) {
+      delay(10);
+    }
+  } */
 }
 
 /// @brief Set pin modes for stepper control, limit switch, and motor control pins.
@@ -306,7 +309,7 @@ void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
             if (millisCurrent - millisPrev >= (unsigned long)sampleInterval_ms) {
                 calib_spool_sum += ina219_spool.getCurrent_mA();
                 calib_spool_samples++;
-                calib_roller_sum += ina219_roller.getCurrent_mA();
+                //calib_roller_sum += ina219_roller.getCurrent_mA();
                 calib_roller_samples++;
                 millisPrev = millisCurrent;
             }
@@ -362,17 +365,17 @@ void countPulse() {
 /// @brief Update current measurements from INA219 sensors and apply a low-pass filter to smooth the readings.
 void updateMeasurements() {
     currentMeasurement_Spool -= (currentMeasurement_Spool - constrain(ina219_spool.getCurrent_mA(),0,1000))*CurrentfilterAlpha; // Simple low-pass filter to smooth current measurement for spool motor
-    currentMeasurement_Roller -= (currentMeasurement_Roller - constrain(ina219_roller.getCurrent_mA(),0,1000))*CurrentfilterAlpha; // Simple low-pass filter to smooth current measurement for roller motor
+    //currentMeasurement_Roller -= (currentMeasurement_Roller - constrain(ina219_roller.getCurrent_mA(),0,1000))*CurrentfilterAlpha; // Simple low-pass filter to smooth current measurement for roller motor
 }
 
 void potSpeedControl() {
     int potValue = analogRead(potPin); // Read potentiometer value (0-1023)
-    targetSpeed = (potValue / 1023.0) * 0.05; // Map to desired speed range (0-0.05 m/s)
+    targetSpeed = 0.01 + ((1023.0 - potValue) / 1023.0) * 0.01; // Inverted map: 0.01-0.02 m/s
 }
 
 void potCurrentControl() {
     int potValue = analogRead(potCurrentPin); // Read potentiometer value (0-1023)
-    SetTorqueCurrent = (potValue / 1023.0) * 200.0; // Map to desired current range (0-200 mA)
+    SetTorqueCurrent = ((1023.0 - potValue) / 1023.0) * 200.0; // Inverted map: max pot -> min current
 }
 
 // New speed measurement test
