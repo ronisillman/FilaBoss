@@ -42,7 +42,6 @@ PID RollerPID(2600, 120, 28);
 //#define encoderResolution 30.0 //pulses per revolution for the 
 #define encoderResolution 600.0 //pulses per revolution for the encoder, used for speed calculation
 
-
 // Filter variables for measurment smoothing
 #define CurrentfilterAlpha 0.02 // Smoothing factor for current measurements
 #define SpeedFilterAlpha 0.1 // Smoothing factor for speed measurements
@@ -56,15 +55,11 @@ double SetTorqueCurrent = 50; //mA, example torque setpoint for testing
 
 // Calibration variables
 float noLoadCurrent_Spool = 0.0; //mA, base no-load current for spool motor
-float noLoadCurrent_Roller = 0.0; //mA, base no-load current for roller motor
-double currentMeasurement_Spool = 0.0; //mA, current measurement for spool motor
-double currentMeasurement_Roller = 0.0; //mA, current measurement for roller motor
+float SpoolMotorCurrent = 0.0; //mA, current measurement for spool motor
 
 // Stepper timing variables
 int stepDirection = LOW;
 unsigned long microsPrevStep = 0;
-
-unsigned long encoderPrevTime = 0;
 
 double speed = 0.0; //m/s, current speed of the filament, calculated from encoder counts
 
@@ -74,9 +69,10 @@ volatile uint8_t lastAState = 0;
 unsigned long speedSamplePrevMs = 0;
 long prevTicksForSpeed = 0;
 
-// Diagnostic timing variable
+// timing variable
 unsigned long lastDiagnoseTime = 0;
 unsigned long lastEncoderPeriod = 0;
+unsigned long encoderPrevTime = 0;
 
 void setup() {
 
@@ -106,21 +102,16 @@ void setup() {
 void loop() {
     unsigned long currentMillis = millis();
     unsigned long microsCurrent = micros();
-    //countPulse(); // Update encoder count and calculate actual speed'
-    updateSpeedEstimate(); // New speed measurement testing
-    updateMeasurements(); // Update current measurements from INA219 sensors
+
+    updateMeasurements(); // Update Speed and Current measurements 
 
     //stepperControl(microsCurrent, speed);
 
-    // Placeholder for actual speed measurement from encoder or other sensor, using current as a proxy for testing
-    //float measureSpeed = (ina219_roller.getCurrent_mA()/noLoadCurrent_Roller);
     potSpeedControl(); // Update target speed based on potentiometer reading
     potCurrentControl(); // Update target current based on potentiometer reading
     motorControl(targetSpeed, speed);
     diagnose(1000); // Print diagnostics every 1000 ms (1 second)
 
-    //TEST this:
-    //decaySpeed(); // Decay speed estimate if no pulses received, should be called regularly in loop
 }
 
 /// @brief Print diagnostic information to the serial monitor at a specified interval
@@ -134,7 +125,7 @@ void diagnose(unsigned long interval) {
         Serial.print(" | Set Speed(mm/s): ");
         Serial.print(targetSpeed*1000.0);
         Serial.print(" | Spool Current(mA): ");
-        Serial.print(currentMeasurement_Spool);
+        Serial.print(SpoolMotorCurrent);
         Serial.print(" | Spool Control Signal: ");
         Serial.print(SpoolPID.getOutput());
         Serial.print(" | Roller Control Signal: ");
@@ -153,7 +144,7 @@ void diagnose(unsigned long interval) {
         Serial.print(" target current:");
         Serial.print(SetTorqueCurrent);
         Serial.print(" measured current:");
-        Serial.println(currentMeasurement_Spool);
+        Serial.println(SpoolMotorCurrent);
     }
 }
 
@@ -163,25 +154,16 @@ void diagnose(unsigned long interval) {
 /// TODO: Implement cascaded control to prevent spool and roller speed missmatch
 void motorControl(float setSpeed, float actualSpeed) {
     // Calculate error from no-load current
-    float torqueCurrent = currentMeasurement_Spool - noLoadCurrent_Spool*SpoolPID.getOutput()/255.0; // Subtract scaled no-load current from actual current to get torque-related current for spool
+    float torqueCurrent = SpoolMotorCurrent - noLoadCurrent_Spool*SpoolPID.getOutput()/255.0; // Subtract scaled no-load current from actual current to get torque-related current for spool
+    
     SpoolPID.setSetpoint(SetTorqueCurrent); // Set current setpoint for spool PID
-    //SpoolPID.setSetpoint(0.2);
     RollerPID.setSetpoint(setSpeed); // Set speed setpoint for roller PID (converted to mm/s for better resolution)
-    //Serial.print(setSpeed);
-    //Serial.print(" |");
-    //Serial.println(setSpeed);
     // Update PID controllers
-    int controlSignal_Spool = SpoolPID.compute(currentMeasurement_Spool);
+    int controlSignal_Spool = SpoolPID.compute(SpoolMotorCurrent);
     int controlSignal_Roller = RollerPID.compute(actualSpeed); // Compute control signal for roller PID (converted to mm/s for better resolution)
-    // Apply control signals to motors (using PWM for speed control)
-    //analogWrite(motorSpoolPin, controlSignal_Spool);
-    //int spd = 30; // Placeholder for testing, replace with controlSignal_Spool for actual control
-    //int spd = controlSignal_Roller;
-    int spd = setSpeed*1000; // Placeholder for testing, replace with controlSignal_Spool for actual control
+
     analogWrite(motorRollerPin, controlSignal_Roller);
-    //analogWrite(motorSpoolPin, spd*(rollerRadius/spoolRadius)*2.5); // This works great with only the spool PID, but with the roller PID
     analogWrite(motorSpoolPin, controlSignal_Spool);
-    //analogWrite(motorRollerPin, controlSignal_Roller);
 }
 
 /// @brief 
@@ -230,14 +212,6 @@ void initI2CPeripherals() {
       delay(10);
     }
   }
-/* 
-  // Initialize INA219 at 0x40
-  if (!ina219_roller.begin()) {
-    Serial.println("Failed to find INA219 at address 0x40");
-    while (1) {
-      delay(10);
-    }
-  } */
 }
 
 /// @brief Set pin modes for stepper control, limit switch, and motor control pins.
@@ -261,21 +235,18 @@ void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
     Serial.println("Starting no-load current calibration and guide homing...");    
     // Non-blocking calibration state and functions
     bool calibrated = false;
-    bool homed = true;
+    bool homed = false;
 
     unsigned long calibStartTime = millis();
     unsigned long millisPrev = 0;
 
     float calib_spool_sum = 0.0;
     int calib_spool_samples = 0;
-    float calib_roller_sum = 0.0;
-    int calib_roller_samples = 0;
 
     stepDirection = LOW; // Set initial direction towards the limit switch
     digitalWrite(dirPin, stepDirection); // Set direction towards the limit switch
     digitalWrite(enablePin, HIGH); // Enable the stepper driver
-    
-    analogWrite(motorRollerPin, 255); // Run roller at full speed for calibration
+
     analogWrite(motorSpoolPin, 255); // Run spool at full speed for calibration
 
     while (!calibrated || !homed) {
@@ -287,20 +258,14 @@ void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
             if (millisCurrent - calibStartTime >= (unsigned long)calibrationTime_ms) {
                 calibrated = true;
                 noLoadCurrent_Spool = calib_spool_sum / calib_spool_samples;
-                noLoadCurrent_Roller = calib_roller_sum / calib_roller_samples;
                 Serial.print("Spool no-load current: ");
                 Serial.print(noLoadCurrent_Spool);
-                Serial.println(" mA");
-                Serial.print("Roller no-load current: ");   
-                Serial.print(noLoadCurrent_Roller);
                 Serial.println(" mA");
             }
             // Accumulate current samples for calibration
             if (millisCurrent - millisPrev >= (unsigned long)sampleInterval_ms) {
                 calib_spool_sum += ina219_spool.getCurrent_mA();
                 calib_spool_samples++;
-                //calib_roller_sum += ina219_roller.getCurrent_mA();
-                calib_roller_samples++;
                 millisPrev = millisCurrent;
             }
         }
@@ -348,7 +313,11 @@ void decaySpeed() {
 
 /// @brief Update current measurements from INA219 sensors and apply a low-pass filter to smooth the readings.
 void updateMeasurements() {
-    currentMeasurement_Spool -= (currentMeasurement_Spool - constrain(ina219_spool.getCurrent_mA(),0,1000))*CurrentfilterAlpha; // Simple low-pass filter to smooth current measurement for spool motor
+    float currentSpool = ina219_spool.getCurrent_mA();
+    SpoolMotorCurrent += CurrentfilterAlpha*(currentSpool - SpoolMotorCurrent); // Simple low-pass filter to smooth current measurement for spool motor
+    updateSpeedEstimate();
+    //TEST this:
+    //decaySpeed(); // Decay speed estimate if no pulses received, should be called regularly in loop
 }
 
 void potSpeedControl() {
