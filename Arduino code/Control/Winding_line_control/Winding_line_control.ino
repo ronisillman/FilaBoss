@@ -64,12 +64,8 @@ double currentMeasurement_Roller = 0.0; //mA, current measurement for roller mot
 int stepDirection = LOW;
 unsigned long microsPrevStep = 0;
 
-// Encoder variables for speed measurement
-int encoderCount = 0;
-int encoderPinA_prev;
-int encoderPinA_value;
 unsigned long encoderPrevTime = 0;
-bool bool_CW;
+
 double speed = 0.0; //m/s, current speed of the filament, calculated from encoder counts
 
 //Testing new speed measurement
@@ -77,10 +73,6 @@ volatile long encoderTicks = 0;
 volatile uint8_t lastAState = 0;
 unsigned long speedSamplePrevMs = 0;
 long prevTicksForSpeed = 0;
-const uint8_t speedAvgWindowSize = 3; // Reduced from 6 - high resolution encoder needs less averaging
-float speedAvgWindow[speedAvgWindowSize] = {0.0f};
-uint8_t speedAvgIndex = 0;
-uint8_t speedAvgCount = 0;
 
 // Diagnostic timing variable
 unsigned long lastDiagnoseTime = 0;
@@ -105,15 +97,10 @@ void setup() {
 
     // Run calibration 
     //HomingAndCalibration(5000, 100); // Run calibration for 5 seconds per motor, sampling every 100 ms
-    encoderPinA_prev = digitalRead(encoderPinA);
-    
+
     //New speed mesurement test
     lastAState = digitalRead(encoderPinA);
     attachInterrupt(digitalPinToInterrupt(encoderPinA), encoderISR, CHANGE);
-    speedSamplePrevMs = millis();
-    for (uint8_t i = 0; i < speedAvgWindowSize; i++) {
-        speedAvgWindow[i] = 0.0f;
-    }
 }
 
 void loop() {
@@ -131,6 +118,9 @@ void loop() {
     potCurrentControl(); // Update target current based on potentiometer reading
     motorControl(targetSpeed, speed);
     diagnose(1000); // Print diagnostics every 1000 ms (1 second)
+
+    //TEST this:
+    //decaySpeed(); // Decay speed estimate if no pulses received, should be called regularly in loop
 }
 
 /// @brief Print diagnostic information to the serial monitor at a specified interval
@@ -333,39 +323,32 @@ void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
 }
 
 /// @brief Interrupt service routine to count encoder pulses and calculate speed.
-void countPulse() {
-    unsigned long currentTime = micros();
-    unsigned long period = currentTime - encoderPrevTime; // Time since last pulse in microseconds
-    encoderPinA_value = digitalRead(encoderPinA);
-    if (encoderPinA_value != encoderPinA_prev) { // check if knob is rotating
-        // if pin A state changed before pin B, rotation is clockwise
-        if (digitalRead(encoderPinB) != encoderPinA_value) {
-            encoderCount ++;
-            bool_CW = true;
-            lastEncoderPeriod = period;
-            speed -= (speed - 2.0*PI*rollerRadius*1000000.0/((float)encoderResolution*(float)period))*SpeedFilterAlpha; // Calculate speed in m/s based on encoder counts and time period
-        } 
-        else {
-            // if pin B state changed before pin A, rotation is counter-clockwise
-            bool_CW = false;
-            encoderCount--;
-            lastEncoderPeriod = period;
-            speed -= (speed + 2.0*PI*rollerRadius*1000000.0/((float)encoderResolution*(float)period))*SpeedFilterAlpha; // Calculate speed in m/s based on encoder counts and time period
-            speed = -speed;
-        }
-        if (period > lastEncoderPeriod) {
-            speed -= (speed - 2.0*PI*rollerRadius*1000000.0/((float)encoderResolution*(float)period)); // If period exceeds max allowed
-            speed = -speed;
-        }
-        encoderPrevTime = currentTime;
+void updateSpeedByPulse() {
+    unsigned long currentTime = millis();
+    unsigned long period = currentTime - encoderPrevTime; // Time since last pulse in milliseconds
+    if (period == 0) return; // Avoid division by zero, should not happen with proper timing
+    float revPerSec = 1000.0 / ((float)period * encoderResolution); // Calculate revolutions per second based on encoder resolution and time period
+    float rawSpeed = revPerSec * (2.0 * PI * rollerRadius); // Calculate raw speed in m/s based on roller radius
+    speed += SpeedFilterAlpha * (rawSpeed - speed); // Apply low-pass filter to smooth speed measurement
+    
+    lastEncoderPeriod = period;
+    encoderPrevTime = currentTime;
+}
+
+void decaySpeed() {
+    unsigned long currentTime = millis();
+    unsigned long gap_period = currentTime - encoderPrevTime; // Time since last pulse in milliseconds
+
+    if (gap_period > lastEncoderPeriod){ // Wait for a full period to elapse before decaying speed, ensures we only decay after missing a pulse
+    float revPerSec = 1000.0 / ((float)gap_period * encoderResolution); // Calculate revolutions per second based on encoder resolution and time period
+    float rawSpeed = revPerSec * (2.0 * PI * rollerRadius); // Calculate raw speed in m/s based on roller radius
+    speed += SpeedFilterAlpha * (rawSpeed - speed); // Apply low-pass filter to smooth speed measurement
     }
-    encoderPinA_prev = encoderPinA_value;
 }
 
 /// @brief Update current measurements from INA219 sensors and apply a low-pass filter to smooth the readings.
 void updateMeasurements() {
     currentMeasurement_Spool -= (currentMeasurement_Spool - constrain(ina219_spool.getCurrent_mA(),0,1000))*CurrentfilterAlpha; // Simple low-pass filter to smooth current measurement for spool motor
-    //currentMeasurement_Roller -= (currentMeasurement_Roller - constrain(ina219_roller.getCurrent_mA(),0,1000))*CurrentfilterAlpha; // Simple low-pass filter to smooth current measurement for roller motor
 }
 
 void potSpeedControl() {
@@ -386,13 +369,18 @@ void encoderISR() {
     if (a != lastAState) {
         encoderTicks += (b != a) ? 1 : -1;  // quadrature direction
         lastAState = a;
+
+        //TEST this:
+        //updateSpeedByPulse(); // Update speed estimate on each pulse
     }
 }
 
 void updateSpeedEstimate() {
-    const unsigned long sampleMs = 75; // 600 PPR allows much faster sampling (was 250ms for 30 PPR)
     unsigned long now = millis();
-    if (now - speedSamplePrevMs < sampleMs) return;
+    float dt = (float)(now - speedSamplePrevMs) / 1000.0f; // Convert ms to seconds
+
+    if (dt < 0.05f) return; // Limit update rate, adjust as needed based on encoder resolution and expected speeds
+    speedSamplePrevMs = now;
 
     noInterrupts();
     long ticks = encoderTicks;
@@ -401,30 +389,10 @@ void updateSpeedEstimate() {
     long deltaTicks = ticks - prevTicksForSpeed;
     prevTicksForSpeed = ticks;
 
-    float dt = (now - speedSamplePrevMs) / 1000.0f;
-    speedSamplePrevMs = now;
-    if (dt <= 0.0f) return;
-
     float revPerSec = ((float)deltaTicks / encoderResolution) / dt;
     float rawSpeed = fabs(revPerSec * (2.0f * PI * rollerRadius)); // m/s magnitude
 
-    speedAvgWindow[speedAvgIndex] = rawSpeed;
-    speedAvgIndex = (speedAvgIndex + 1) % speedAvgWindowSize;
-    if (speedAvgCount < speedAvgWindowSize) {
-        speedAvgCount++;
-    }
-
-    float avgRawSpeed = 0.0f;
-    for (uint8_t i = 0; i < speedAvgCount; i++) {
-        avgRawSpeed += speedAvgWindow[i];
-    }
-    if (speedAvgCount > 0) {
-        avgRawSpeed /= speedAvgCount;
-    }
-
-    const float alpha = 0.45f; // More responsive with high-res encoder (was 0.25f)
-    speed += alpha * (avgRawSpeed - speed);
-    speed = fabs(speed);
+    speed += SpeedFilterAlpha * (rawSpeed - speed); // Low-pass filter to smooth speed estimate
 
     if (deltaTicks == 0) {              // no pulses in window -> decay to zero
         const float stopThreshold = 0.0002f; // 0.2 mm/s, keep very low-speed readings alive
