@@ -11,7 +11,13 @@ PID SpoolPID(7000, 2500, 5.0);
 //PID RollerPID(1000, 0.3, 0.0); // Initialize PID controller with example gains
 PID RollerPID(12000, 6000, 300);
 //PID RollerPID(1000, 0, 0.0);
- 
+
+// Board constants and variables
+#define ADC_bits 10.0
+#define DAC_bits 8.0
+#define ADC_maxValue pow(2.0, ADC_bits) - 1.0
+#define DAC_maxValue pow(2.0, DAC_bits) - 1.0
+
 //pin setup
 #define motorRollerPin 3
 #define motorSpoolPin 11
@@ -99,8 +105,8 @@ void setup() {
     Serial.println("I2C peripherals initialized.");
     
     // Set output limits for PID controllers
-    SpoolPID.setOutputLimits(0, 255); // Set output limits for spool motor control (0-255 for PWM)
-    RollerPID.setOutputLimits(0, 255); // Set output limits for roller motor control (0-255 for PWM)
+    SpoolPID.setOutputLimits(0, DAC_maxValue); // Set output limits for spool motor control
+    RollerPID.setOutputLimits(0, DAC_maxValue); // Set output limits for roller motor control
 
     // Run calibration 
     //HomingAndCalibration(5000, 100); // Run calibration for 5 seconds per motor, sampling every 100 ms
@@ -164,7 +170,7 @@ void diagnose(unsigned long interval) {
 /// TODO: Implement cascaded control to prevent spool and roller speed missmatch
 void motorControl(float setSpeed, float actualSpeed) {
     // Calculate error from no-load current
-    float torqueCurrent = SpoolMotorCurrent - noLoadCurrent_Spool*SpoolPID.getOutput()/255.0; // Subtract scaled no-load current from actual current to get torque-related current for spool
+    float torqueCurrent = SpoolMotorCurrent - noLoadCurrent_Spool*SpoolPID.getOutput()/DAC_maxValue; // Subtract scaled no-load current from actual current to get torque-related current for spool
     
     SpoolPID.setSetpoint(SetTorqueCurrent); // Set current setpoint for spool PID
     RollerPID.setSetpoint(setSpeed); // Set speed setpoint for roller PID (converted to mm/s for better resolution)
@@ -268,7 +274,7 @@ void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
     digitalWrite(dirPin, stepDirection); // Set direction towards the limit switch
     digitalWrite(enablePin, HIGH); // Enable the stepper driver
 
-    analogWrite(motorSpoolPin, 255); // Run spool at full speed for calibration
+    analogWrite(motorSpoolPin, DAC_maxValue); // Run spool at full speed for calibration
 
     while (!calibrated || !homed) {
         unsigned long millisCurrent = millis();
@@ -342,13 +348,13 @@ void updateMeasurements() {
 }
 
 void potSpeedControl() {
-    int potValue = analogRead(potPin); // Read potentiometer value (0-1023)
-    targetSpeed = ((float)(1023 - potValue) / 1023.0) * 0.016; // Inverted map: 0.01-0.02 m/s
+    float potValue = analogRead(potPin); // Read potentiometer value (0-1023)
+    targetSpeed = ((ADC_maxValue - potValue) / ADC_maxValue) * 0.016; // Inverted map: 0.01-0.02 m/s
 }
 
 void potCurrentControl() {
-    int potValue = analogRead(potCurrentPin); // Read potentiometer value (0-1023)
-    SetTorqueCurrent = ((float)(1023 - potValue) / 1023.0) * 200.0; // Inverted map: max pot -> min current
+    float potValue = analogRead(potCurrentPin); // Read potentiometer value (0-1023)
+    SetTorqueCurrent = ((ADC_maxValue - potValue) / ADC_maxValue) * 200.0; // Inverted map: max pot -> min current
 }
 
 // New speed measurement test
