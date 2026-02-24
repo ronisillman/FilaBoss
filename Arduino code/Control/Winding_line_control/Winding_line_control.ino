@@ -9,8 +9,8 @@ Adafruit_INA219 ina219_spool(0x41);
 //PID SpoolPID(0.05, 0.15, 0.0); // Initialize PID controller with example gains
 PID SpoolPID(7000, 2500, 5.0);
 //PID RollerPID(1000, 0.3, 0.0); // Initialize PID controller with example gains
-//PID RollerPID(4000, 80, 0.5);
-PID RollerPID(2600, 120, 28);
+PID RollerPID(12000, 6000, 300);
+//PID RollerPID(1000, 0, 0.0);
  
 //pin setup
 #define motorRollerPin 3
@@ -156,13 +156,13 @@ void diagnose(unsigned long interval) {
         // Add more diagnostic information as needed
         Serial.println(); */
         // These four for PID plotting in the serial plotter
-        Serial.print("speed target:");
+        Serial.print("speed_target:");
         Serial.print(targetSpeed * 1000.0f);
-        Serial.print(" measured speed:");
+        Serial.print(",measured_speed:");
         Serial.print(speed * 1000.0f);
-        Serial.print(" target current:");
+        Serial.print(",target_current:");
         Serial.print(SetTorqueCurrent);
-        Serial.print(" measured current:");
+        Serial.print(",measured_current:");
         Serial.println(currentMeasurement_Spool);
     }
 }
@@ -370,7 +370,7 @@ void updateMeasurements() {
 
 void potSpeedControl() {
     int potValue = analogRead(potPin); // Read potentiometer value (0-1023)
-    targetSpeed = 0.01 + ((1023.0 - potValue) / 1023.0) * 0.01; // Inverted map: 0.01-0.02 m/s
+    targetSpeed = ((1023.0 - potValue) / 1023.0) * 0.016; // Inverted map: 0.01-0.02 m/s
 }
 
 void potCurrentControl() {
