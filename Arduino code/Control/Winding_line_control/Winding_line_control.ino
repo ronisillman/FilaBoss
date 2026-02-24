@@ -322,12 +322,12 @@ void updateMeasurements() {
 
 void potSpeedControl() {
     int potValue = analogRead(potPin); // Read potentiometer value (0-1023)
-    targetSpeed = ((1023.0 - potValue) / 1023.0) * 0.016; // Inverted map: 0.01-0.02 m/s
+    targetSpeed = ((float)(1023 - potValue) / 1023.0) * 0.016; // Inverted map: 0.01-0.02 m/s
 }
 
 void potCurrentControl() {
     int potValue = analogRead(potCurrentPin); // Read potentiometer value (0-1023)
-    SetTorqueCurrent = ((1023.0 - potValue) / 1023.0) * 200.0; // Inverted map: max pot -> min current
+    SetTorqueCurrent = ((float)(1023 - potValue) / 1023.0) * 200.0; // Inverted map: max pot -> min current
 }
 
 // New speed measurement test
