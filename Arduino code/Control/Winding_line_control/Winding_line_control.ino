@@ -44,7 +44,7 @@ PID RollerPID(12000, 6000, 300);
 
 // Filter variables for measurment smoothing
 #define CurrentfilterAlpha 0.02 // Smoothing factor for current measurements
-#define SpeedFilterAlpha 0.1 // Smoothing factor for speed measurements
+#define SpeedFilterAlpha 0.03 // Smoothing factor for speed measurements
 
 double guidePosition = 0.0; //m, current position of the filament guide
 int layerNumber = 0; //current layer number, used for testing
@@ -144,7 +144,7 @@ void diagnose(unsigned long interval) {
         Serial.print(",target_current:");
         Serial.print(SetTorqueCurrent);
         Serial.print(",measured_current:");
-        Serial.println(currentMeasurement_Spool);
+        Serial.println(SpoolMotorCurrent);
     }
 }
 
@@ -315,9 +315,9 @@ void decaySpeed() {
 void updateMeasurements() {
     float currentSpool = ina219_spool.getCurrent_mA();
     SpoolMotorCurrent += CurrentfilterAlpha*(currentSpool - SpoolMotorCurrent); // Simple low-pass filter to smooth current measurement for spool motor
-    updateSpeedEstimate();
+    //updateSpeedEstimate();
     //TEST this:
-    //decaySpeed(); // Decay speed estimate if no pulses received, should be called regularly in loop
+    decaySpeed(); // Decay speed estimate if no pulses received, should be called regularly in loop
 }
 
 void potSpeedControl() {
@@ -340,7 +340,7 @@ void encoderISR() {
         lastAState = a;
 
         //TEST this:
-        //updateSpeedByPulse(); // Update speed estimate on each pulse
+        updateSpeedByPulse(); // Update speed estimate on each pulse
     }
 }
 
