@@ -11,7 +11,13 @@ PID SpoolPID(7000, 2500, 5.0);
 //PID RollerPID(1000, 0.3, 0.0); // Initialize PID controller with example gains
 PID RollerPID(12000, 6000, 300);
 //PID RollerPID(1000, 0, 0.0);
- 
+
+// Board constants and variables
+#define ADC_bits 10.0
+#define DAC_bits 8.0
+#define ADC_maxValue pow(2.0, ADC_bits) - 1.0
+#define DAC_maxValue pow(2.0, DAC_bits) - 1.0
+
 //pin setup
 #define motorRollerPin 3
 #define motorSpoolPin 11
@@ -74,6 +80,17 @@ unsigned long lastDiagnoseTime = 0;
 unsigned long lastEncoderPeriod = 0;
 unsigned long encoderPrevTime = 0;
 
+// Input encoder variables
+// Define rotary encoder pins
+//#define ENC_A 2
+//#define ENC_B 3
+//unsigned long _lastIncReadTime = micros(); 
+//unsigned long _lastDecReadTime = micros(); 
+//#define _pauseLength 25000
+//#define _fastIncrement 10
+//volatile int counter = 0;
+
+
 void setup() {
 
     Serial.begin(9600);
@@ -88,8 +105,8 @@ void setup() {
     Serial.println("I2C peripherals initialized.");
     
     // Set output limits for PID controllers
-    SpoolPID.setOutputLimits(0, 255); // Set output limits for spool motor control (0-255 for PWM)
-    RollerPID.setOutputLimits(0, 255); // Set output limits for roller motor control (0-255 for PWM)
+    SpoolPID.setOutputLimits(0, DAC_maxValue); // Set output limits for spool motor control
+    RollerPID.setOutputLimits(0, DAC_maxValue); // Set output limits for roller motor control
 
     // Run calibration 
     //HomingAndCalibration(5000, 100); // Run calibration for 5 seconds per motor, sampling every 100 ms
@@ -156,7 +173,7 @@ void diagnose(unsigned long interval) {
 /// TODO: Implement cascaded control to prevent spool and roller speed missmatch
 void motorControl(float setSpeed, float actualSpeed) {
     // Calculate error from no-load current
-    float torqueCurrent = SpoolMotorCurrent - noLoadCurrent_Spool*SpoolPID.getOutput()/255.0; // Subtract scaled no-load current from actual current to get torque-related current for spool
+    float torqueCurrent = SpoolMotorCurrent - noLoadCurrent_Spool*SpoolPID.getOutput()/DAC_maxValue; // Subtract scaled no-load current from actual current to get torque-related current for spool
     
     SpoolPID.setSetpoint(SetTorqueCurrent); // Set current setpoint for spool PID
     RollerPID.setSetpoint(setSpeed); // Set speed setpoint for roller PID (converted to mm/s for better resolution)
@@ -218,16 +235,27 @@ void initI2CPeripherals() {
 
 /// @brief Set pin modes for stepper control, limit switch, and motor control pins.
 void pinSetup() {
+
     pinMode(stepPin, OUTPUT);
     pinMode(dirPin, OUTPUT);
     pinMode(enablePin, OUTPUT);
     pinMode(limitSwitchPin, INPUT_PULLUP);
+
     pinMode(motorRollerPin, OUTPUT);
     pinMode(motorSpoolPin, OUTPUT);
+
     pinMode (encoderPinA, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(encoderPinA), encoderISR, CHANGE);
     pinMode (encoderPinB, INPUT_PULLUP);
+
     pinMode(potPin, INPUT);
     pinMode(potCurrentPin, INPUT);
+    /*
+    pinMode(ENC_A, INPUT_PULLUP);
+    pinMode(ENC_B, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(ENC_A), read_encoder, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(ENC_B), read_encoder, CHANGE);
+    */
 }
 
 /// @brief Perform homing and no-load current calibration for the filament guide system.
@@ -249,7 +277,7 @@ void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
     digitalWrite(dirPin, stepDirection); // Set direction towards the limit switch
     digitalWrite(enablePin, HIGH); // Enable the stepper driver
 
-    analogWrite(motorSpoolPin, 255); // Run spool at full speed for calibration
+    analogWrite(motorSpoolPin, DAC_maxValue); // Run spool at full speed for calibration
 
     while (!calibrated || !homed) {
         unsigned long millisCurrent = millis();
@@ -324,13 +352,13 @@ void updateMeasurements() {
 }
 
 void potSpeedControl() {
-    int potValue = analogRead(potPin); // Read potentiometer value (0-1023)
-    targetSpeed = ((1023.0 - potValue) / 1023.0) * 0.02; // Inverted map: 0.01-0.02 m/s
+    float potValue = analogRead(potPin); // Read potentiometer value (0-1023)
+    targetSpeed = ((ADC_maxValue - potValue) / ADC_maxValue) * 0.016; // Inverted map: 0.01-0.02 m/s
 }
 
 void potCurrentControl() {
-    int potValue = analogRead(potCurrentPin); // Read potentiometer value (0-1023)
-    SetTorqueCurrent = ((1023.0 - potValue) / 1023.0) * 200.0; // Inverted map: max pot -> min current
+    float potValue = analogRead(potCurrentPin); // Read potentiometer value (0-1023)
+    SetTorqueCurrent = ((ADC_maxValue - potValue) / ADC_maxValue) * 200.0; // Inverted map: max pot -> min current
 }
 
 // New speed measurement test
@@ -347,32 +375,46 @@ void encoderISR() {
     }
 }
 
-void updateSpeedEstimate() {
-    unsigned long now = millis();
-    float dt = (float)(now - speedSamplePrevMs) / 1000.0f; // Convert ms to seconds
+/* Based on Oleg Mazurov's code for rotary encoder interrupt service routines for AVR micros
+   here https://chome.nerpa.tech/mcu/reading-rotary-encoder-on-arduino/
+   and using interrupts https://chome.nerpa.tech/mcu/rotary-encoder-interrupt-service-routine-for-avr-micros/
 
-    if (dt < 0.05f) return; // Limit update rate, adjust as needed based on encoder resolution and expected speeds
-    speedSamplePrevMs = now;
+   This example does not use the port read method. Tested with Nano and ESP32
+   both encoder A and B pins must be connected to interrupt enabled pins, see here for more info:
+   https://www.arduino.cc/reference/en/language/functions/external-interrupts/attachinterrupt/
+*/
+void read_encoder() {
+  // Encoder interrupt routine for both pins. Updates counter
+  // if they are valid and have rotated a full indent
+ 
+  static uint8_t old_AB = 3;  // Lookup table index
+  static int8_t encval = 0;   // Encoder value  
+  static const int8_t enc_states[]  = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0}; // Lookup table
 
-    noInterrupts();
-    long ticks = encoderTicks;
-    interrupts();
+  old_AB <<=2;  // Remember previous state
 
-    long deltaTicks = ticks - prevTicksForSpeed;
-    prevTicksForSpeed = ticks;
+  if (digitalRead(ENC_A)) old_AB |= 0x02; // Add current state of pin A
+  if (digitalRead(ENC_B)) old_AB |= 0x01; // Add current state of pin B
+  
+  encval += enc_states[( old_AB & 0x0f )];
 
-    float revPerSec = ((float)deltaTicks / encoderResolution) / dt;
-    float rawSpeed = fabs(revPerSec * (2.0f * PI * rollerRadius)); // m/s magnitude
-
-    speed += SpeedFilterAlpha * (rawSpeed - speed); // Low-pass filter to smooth speed estimate
-
-    if (deltaTicks == 0) {              // no pulses in window -> decay to zero
-        const float stopThreshold = 0.0002f; // 0.2 mm/s, keep very low-speed readings alive
-        float decayFactor = 0.94f;
-        if (targetSpeed < 0.015f) {
-            decayFactor = 0.98f; // much gentler decay for low-speed operation
-        }
-        speed *= decayFactor;
-        if (speed < stopThreshold) speed = 0.0f;
+  // Update counter if encoder has rotated a full indent, that is at least 4 steps
+  if( encval > 3 ) {        // Four steps forward
+    int changevalue = 1;
+    if((micros() - _lastIncReadTime) < _pauseLength) {
+      changevalue = _fastIncrement * changevalue; 
     }
-}
+    _lastIncReadTime = micros();
+    counter = counter + changevalue;              // Update counter
+    encval = 0;
+  }
+  else if( encval < -3 ) {        // Four steps backward
+    int changevalue = -1;
+    if((micros() - _lastDecReadTime) < _pauseLength) {
+      changevalue = _fastIncrement * changevalue; 
+    }
+    _lastDecReadTime = micros();
+    counter = counter + changevalue;              // Update counter
+    encval = 0;
+  }
+} 
