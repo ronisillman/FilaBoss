@@ -96,6 +96,8 @@ void setup() {
 
     //New speed mesurement test
     lastAState = digitalRead(encoderPinA);
+    encoderPrevTime = millis(); // Initialize encoder timestamp to current time
+    lastEncoderPeriod = 100; // Initialize to reasonable default period (~10 Hz)
     attachInterrupt(digitalPinToInterrupt(encoderPinA), encoderISR, CHANGE);
 }
 
@@ -292,8 +294,9 @@ void updateSpeedByPulse() {
     unsigned long currentTime = millis();
     unsigned long period = currentTime - encoderPrevTime; // Time since last pulse in milliseconds
     if (period == 0) return; // Avoid division by zero, should not happen with proper timing
-    float revPerSec = 1000.0 / ((float)period * encoderResolution); // Calculate revolutions per second based on encoder resolution and time period
-    float rawSpeed = revPerSec * (2.0 * PI * rollerRadius); // Calculate raw speed in m/s based on roller radius
+    // One pulse = 1/600 revolution, period in ms means period/1000 seconds per pulse
+    float revPerSec = 1000.0f / ((float)period * encoderResolution); // revolutions per second
+    float rawSpeed = revPerSec * (2.0f * PI * rollerRadius); // Calculate speed in m/s based on roller radius
     speed += SpeedFilterAlpha * (rawSpeed - speed); // Apply low-pass filter to smooth speed measurement
     
     lastEncoderPeriod = period;
@@ -322,7 +325,7 @@ void updateMeasurements() {
 
 void potSpeedControl() {
     int potValue = analogRead(potPin); // Read potentiometer value (0-1023)
-    targetSpeed = ((1023.0 - potValue) / 1023.0) * 0.016; // Inverted map: 0.01-0.02 m/s
+    targetSpeed = ((1023.0 - potValue) / 1023.0) * 0.02; // Inverted map: 0.01-0.02 m/s
 }
 
 void potCurrentControl() {
