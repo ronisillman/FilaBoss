@@ -43,7 +43,7 @@ void loop() {
     Serial.print(",");
     Serial.println(magnetDetected ? 1 : 0);
     
-    delay(50);  // 20 Hz update
+    delay(500);  // 20 Hz update
 }
 
 // Optional: Diagnostic function
