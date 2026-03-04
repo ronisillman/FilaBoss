@@ -11,14 +11,14 @@ Adafruit_AS5600 as5600;
 //PID SpoolPID(0.05, 0.15, 0.0); // Initialize PID controller with example gains
 PID SpoolPID(7000, 2500, 5.0);
 //PID RollerPID(1000, 0.3, 0.0); // Initialize PID controller with example gains
-PID RollerPID(12000, 6000, 300);
-//PID RollerPID(1000, 0, 0.0);
+//PID RollerPID(12000, 6000, 300); // for 24 VDC motor
+PID RollerPID(5000, 1500, 5.0); // for 12v dc motor
 
 // Board constants and variables
 #define ADC_bits 10.0
 #define DAC_bits 8.0
-#define ADC_maxValue pow(2.0, ADC_bits) - 1.0
-#define DAC_maxValue pow(2.0, DAC_bits) - 1.0
+#define ADC_maxValue 1023.0
+#define DAC_maxValue 255.0
 
 //pin setup
 #define motorRollerPin 3
@@ -27,7 +27,7 @@ PID RollerPID(12000, 6000, 300);
 #define dirPin 8
 #define enablePin 5
 #define limitSwitchLowPin 12
-#define LimitSwitchHighPin 13
+#define limitSwitchHighPin 13
 #define encoderPinA 2 // CLK pin
 #define encoderPinB 4 // DT pin
 #define potPin A3 // Potentiometer for testing speed control
@@ -47,6 +47,7 @@ PID RollerPID(12000, 6000, 300);
 #define spoolWidth 0.045 //m, width of the filament spool
 #define ratio filamentDiameter/leadScrewPitch //gear ratio between spool and guide, set to 1 for direct drive
 #define rollerRadius 0.0119 //m, radius of the roller in contact with the filament, used for speed calculation
+#define encoderEdgesPerPulse 2.0 // encoderPinA interrupt on CHANGE counts both rising and falling edges
 
 //#define encoderResolution 30.0 //pulses per revolution for the 
 #define encoderResolution 600.0 //pulses per revolution for the encoder, used for speed calculation
@@ -117,7 +118,7 @@ void setup() {
     // Set output limits for PID controllers
     SpoolPID.setOutputLimits(0, DAC_maxValue); // Set output limits for spool motor control
     //12V motor
-    RollerPID.setOutputLimits(0, DAC_maxValue/2); // Set output limits for roller motor control
+    RollerPID.setOutputLimits(0, DAC_maxValue*0.6); // Set output limits for roller motor control
 
     // Run calibration 
     //HomingAndCalibration(5000, 100); // Run calibration for 5 seconds per motor, sampling every 100 ms
@@ -135,9 +136,10 @@ void loop() {
     unsigned long microsCurrent = micros();
 
     updateMeasurements(); // Update Speed and Current measurements 
+    measureMagnetometerSpeed(); // Keep AS5600 speed updated at loop rate
 
-    //stepperControl(microsCurrent, speed);
-
+    stepperControl(microsCurrent, speed);
+    //stepperConstantSpeedControl(microsCurrent, 2000.0f, HIGH); // Test constant speed control at 200 steps/s in forward direction
     potSpeedControl(); // Update target speed based on potentiometer reading
     potCurrentControl(); // Update target current based on potentiometer reading
     motorControl(targetSpeed, speed);
@@ -151,9 +153,19 @@ double measureMagnetometerSpeed() {
         return magnetometerSpeed;
     }
 
-    unsigned long now = millis();
-    unsigned long dtMs = now - prevAs5600Time;
-    if (dtMs < 10) {
+    static unsigned long prevAs5600Micros = 0;
+    const unsigned long sampleUs = 20000; // 20 ms fixed update for stable speed estimate
+    const float maxAllowedRevPerSec = 3.0f; // reject unrealistic AS5600 spikes
+
+    unsigned long nowUs = micros();
+    if (prevAs5600Micros == 0) {
+        prevAs5600Micros = nowUs;
+        prevAs5600Angle = as5600.getAngle();
+        return magnetometerSpeed;
+    }
+
+    unsigned long dtUs = nowUs - prevAs5600Micros;
+    if (dtUs < sampleUs) {
         return magnetometerSpeed;
     }
 
@@ -163,14 +175,23 @@ double measureMagnetometerSpeed() {
     if (delta > 2048) delta -= 4096;
     if (delta < -2048) delta += 4096;
 
-    float dt = (float)dtMs / 1000.0f;
+    float dt = (float)dtUs / 1000000.0f;
+
+    float maxDeltaCounts = maxAllowedRevPerSec * 4096.0f * dt;
+    if (fabs((float)delta) > maxDeltaCounts) {
+        prevAs5600Angle = angleNow;
+        prevAs5600Micros = nowUs;
+        return magnetometerSpeed;
+    }
+
     float revPerSec = ((float)delta / 4096.0f) / dt;
     float rawSpeed = fabs(revPerSec * (2.0f * PI * rollerRadius));
 
     magnetometerSpeed += SpeedFilterAlpha * (rawSpeed - magnetometerSpeed);
 
     prevAs5600Angle = angleNow;
-    prevAs5600Time = now;
+    prevAs5600Micros = nowUs;
+    prevAs5600Time = millis();
 
     return magnetometerSpeed;
 }
@@ -181,7 +202,6 @@ void diagnose(unsigned long interval) {
     unsigned long currentMillis = millis();
     if (currentMillis - lastDiagnoseTime >= interval) { // Print diagnostics every 1 second
         lastDiagnoseTime = currentMillis;
-    double magSpeed = measureMagnetometerSpeed();
 /*         Serial.print("Filament Speed(mm/s): ");
         Serial.print(speed*1000.0);
         Serial.print(" | Set Speed(mm/s): ");
@@ -204,11 +224,16 @@ void diagnose(unsigned long interval) {
         Serial.print(",measured_speed:");
         Serial.print(speed * 1000.0f);
         Serial.print(",mag_speed:");
-        Serial.print(magSpeed * 1000.0f);
+        Serial.print(magnetometerSpeed * 1000.0f);
         Serial.print(",target_current:");
         Serial.print(SetTorqueCurrent);
         Serial.print(",measured_current:");
-        Serial.println(SpoolMotorCurrent);
+        Serial.print(SpoolMotorCurrent);
+        Serial.print(",limit_switch:");
+        Serial.print(digitalRead(limitSwitchHighPin));
+        Serial.print(",limit_switch_low:");
+        Serial.print(digitalRead(limitSwitchLowPin));
+        Serial.println(); // Newline for serial plotter
     }
 }
 
@@ -240,7 +265,7 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
     double stepIntervalSeconds = 1.0 / stepperSpeed;                        // Calculate interval between steps in seconds
 
     // Check if it's time to update the layer number and reverse direction
-    if (digitalRead(limitSwitchPin) == LOW) {                               // If limit switch is triggered, reverse direction
+    if (digitalRead(limitSwitchHighPin) == LOW && digitalRead(limitSwitchLowPin) == HIGH) {                               // If limit switch is triggered, reverse direction
         layerNumber++;
         stepDirection = !stepDirection;                                     // Reverse direction for next layer
         digitalWrite(dirPin, stepDirection);                                // Set direction
@@ -263,6 +288,33 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
                 guidePosition -= leadScrewPitch / stepsPerRevolution; // Update guide position
             }
         }
+    }
+}
+
+/// @brief Simple non-blocking constant-speed stepper control for testing.
+/// @param microsCurrent Current time from micros().
+/// @param stepsPerSecond Target step rate in steps/s.
+/// @param direction HIGH/LOW direction for dir pin.
+void stepperConstantSpeedControl(unsigned long microsCurrent, float stepsPerSecond, int direction) {
+    static unsigned long prevToggleMicros = 0;
+    static int stepState = LOW;
+
+    if (stepsPerSecond <= 0.0f) {
+        digitalWrite(stepPin, LOW);
+        return;
+    }
+
+    digitalWrite(dirPin, direction);
+
+    unsigned long toggleIntervalMicros = (unsigned long)(500000.0f / stepsPerSecond);
+    if (toggleIntervalMicros < 1) {
+        toggleIntervalMicros = 1;
+    }
+
+    if (microsCurrent - prevToggleMicros >= toggleIntervalMicros) {
+        stepState = !stepState;
+        digitalWrite(stepPin, stepState);
+        prevToggleMicros = microsCurrent;
     }
 }
 
@@ -297,7 +349,8 @@ void pinSetup() {
     pinMode(stepPin, OUTPUT);
     pinMode(dirPin, OUTPUT);
     pinMode(enablePin, OUTPUT);
-    pinMode(limitSwitchPin, INPUT_PULLUP);
+    pinMode(limitSwitchLowPin, INPUT_PULLUP);
+    pinMode(limitSwitchHighPin, INPUT_PULLUP);
 
     pinMode(motorRollerPin, OUTPUT);
     pinMode(motorSpoolPin, OUTPUT);
@@ -322,7 +375,7 @@ void pinSetup() {
 void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
     Serial.println("Starting no-load current calibration and guide homing...");    
     // Non-blocking calibration state and functions
-    bool calibrated = false;
+    bool calibrated = true;
     bool homed = false;
 
     unsigned long calibStartTime = millis();
@@ -359,7 +412,7 @@ void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
         }
         // Handle homing towards the limit switch
         if (!homed) {
-            if (digitalRead(limitSwitchPin) == HIGH) { // If limit switch is not triggered, continue homing
+            if (digitalRead(limitSwitchHighPin) == LOW && digitalRead(limitSwitchLowPin) == HIGH) { // If limit switch is not triggered, continue homing
                 if (microsCurrent - microsPrevStep >= ApproachStepInterval) {
                     digitalWrite(stepPin, !digitalRead(stepPin)); // Toggle step pin
                 }
@@ -380,8 +433,8 @@ void updateSpeedByPulse() {
     unsigned long currentTime = millis();
     unsigned long period = currentTime - encoderPrevTime; // Time since last pulse in milliseconds
     if (period == 0) return; // Avoid division by zero, should not happen with proper timing
-    // One pulse = 1/600 revolution, period in ms means period/1000 seconds per pulse
-    float revPerSec = 1000.0f / ((float)period * encoderResolution); // revolutions per second
+    // With CHANGE interrupt on channel A, we get 2 edges per encoder pulse.
+    float revPerSec = 1000.0f / ((float)period * encoderResolution * encoderEdgesPerPulse); // revolutions per second
     float rawSpeed = revPerSec * (2.0f * PI * rollerRadius); // Calculate speed in m/s based on roller radius
     speed += SpeedFilterAlpha * (rawSpeed - speed); // Apply low-pass filter to smooth speed measurement
     
@@ -394,7 +447,7 @@ void decaySpeed() {
     unsigned long gap_period = currentTime - encoderPrevTime; // Time since last pulse in milliseconds
 
     if (gap_period > lastEncoderPeriod){ // Wait for a full period to elapse before decaying speed, ensures we only decay after missing a pulse
-    float revPerSec = 1000.0 / ((float)gap_period * encoderResolution); // Calculate revolutions per second based on encoder resolution and time period
+    float revPerSec = 1000.0 / ((float)gap_period * encoderResolution * encoderEdgesPerPulse); // Match encoder edge counting in ISR
     float rawSpeed = revPerSec * (2.0 * PI * rollerRadius); // Calculate raw speed in m/s based on roller radius
     speed += SpeedFilterAlpha * (rawSpeed - speed); // Apply low-pass filter to smooth speed measurement
     }
@@ -411,7 +464,7 @@ void updateMeasurements() {
 
 void potSpeedControl() {
     float potValue = analogRead(potPin); // Read potentiometer value (0-1023)
-    targetSpeed = ((ADC_maxValue - potValue) / ADC_maxValue) * 0.016; // Inverted map: 0.01-0.02 m/s
+    targetSpeed = ((ADC_maxValue - potValue) / ADC_maxValue) * 0.03; // Inverted map: 0.01-0.02 m/s
 }
 
 void potCurrentControl() {
@@ -440,7 +493,7 @@ void encoderISR() {
    This example does not use the port read method. Tested with Nano and ESP32
    both encoder A and B pins must be connected to interrupt enabled pins, see here for more info:
    https://www.arduino.cc/reference/en/language/functions/external-interrupts/attachinterrupt/
-*/
+
 void read_encoder() {
   // Encoder interrupt routine for both pins. Updates counter
   // if they are valid and have rotated a full indent
@@ -476,3 +529,4 @@ void read_encoder() {
     encval = 0;
   }
 } 
+  */
