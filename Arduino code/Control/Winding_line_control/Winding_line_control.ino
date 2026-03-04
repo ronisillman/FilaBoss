@@ -1,10 +1,12 @@
 //Stepper motor control for the filament guide on a leadscrew
 #include <Wire.h>
 #include <Adafruit_INA219.h>
+#include <Adafruit_AS5600.h>
 #include "pid.h"
 
 //two current sensors
 Adafruit_INA219 ina219_spool(0x41);
+Adafruit_AS5600 as5600;
 //Adafruit_INA219 ina219_roller(0x40);
 //PID SpoolPID(0.05, 0.15, 0.0); // Initialize PID controller with example gains
 PID SpoolPID(7000, 2500, 5.0);
@@ -81,6 +83,13 @@ unsigned long lastDiagnoseTime = 0;
 unsigned long lastEncoderPeriod = 0;
 unsigned long encoderPrevTime = 0;
 
+// AS5600 magnetometer speed estimate (same shaft as roller)
+bool as5600Available = false;
+bool as5600InitPrinted = false;
+uint16_t prevAs5600Angle = 0;
+unsigned long prevAs5600Time = 0;
+double magnetometerSpeed = 0.0; // m/s
+
 // Input encoder variables
 // Define rotary encoder pins
 //#define ENC_A 2
@@ -111,12 +120,13 @@ void setup() {
     RollerPID.setOutputLimits(0, DAC_maxValue/2); // Set output limits for roller motor control
 
     // Run calibration 
-    HomingAndCalibration(5000, 100); // Run calibration for 5 seconds per motor, sampling every 100 ms
+    //HomingAndCalibration(5000, 100); // Run calibration for 5 seconds per motor, sampling every 100 ms
 
     //New speed mesurement test
     lastAState = digitalRead(encoderPinA);
     encoderPrevTime = millis(); // Initialize encoder timestamp to current time
     lastEncoderPeriod = 100; // Initialize to reasonable default period (~10 Hz)
+    prevAs5600Time = millis();
     attachInterrupt(digitalPinToInterrupt(encoderPinA), encoderISR, CHANGE);
 }
 
@@ -126,13 +136,43 @@ void loop() {
 
     updateMeasurements(); // Update Speed and Current measurements 
 
-    stepperControl(microsCurrent, speed);
-    
+    //stepperControl(microsCurrent, speed);
+
     potSpeedControl(); // Update target speed based on potentiometer reading
     potCurrentControl(); // Update target current based on potentiometer reading
     motorControl(targetSpeed, speed);
     diagnose(1000); // Print diagnostics every 1000 ms (1 second)
 
+}
+
+double measureMagnetometerSpeed() {
+    if (!as5600Available) {
+        magnetometerSpeed = 0.0;
+        return magnetometerSpeed;
+    }
+
+    unsigned long now = millis();
+    unsigned long dtMs = now - prevAs5600Time;
+    if (dtMs < 10) {
+        return magnetometerSpeed;
+    }
+
+    uint16_t angleNow = as5600.getAngle(); // 0..4095
+    int16_t delta = (int16_t)angleNow - (int16_t)prevAs5600Angle;
+
+    if (delta > 2048) delta -= 4096;
+    if (delta < -2048) delta += 4096;
+
+    float dt = (float)dtMs / 1000.0f;
+    float revPerSec = ((float)delta / 4096.0f) / dt;
+    float rawSpeed = fabs(revPerSec * (2.0f * PI * rollerRadius));
+
+    magnetometerSpeed += SpeedFilterAlpha * (rawSpeed - magnetometerSpeed);
+
+    prevAs5600Angle = angleNow;
+    prevAs5600Time = now;
+
+    return magnetometerSpeed;
 }
 
 /// @brief Print diagnostic information to the serial monitor at a specified interval
@@ -141,6 +181,7 @@ void diagnose(unsigned long interval) {
     unsigned long currentMillis = millis();
     if (currentMillis - lastDiagnoseTime >= interval) { // Print diagnostics every 1 second
         lastDiagnoseTime = currentMillis;
+    double magSpeed = measureMagnetometerSpeed();
 /*         Serial.print("Filament Speed(mm/s): ");
         Serial.print(speed*1000.0);
         Serial.print(" | Set Speed(mm/s): ");
@@ -162,6 +203,8 @@ void diagnose(unsigned long interval) {
         Serial.print(targetSpeed * 1000.0f);
         Serial.print(",measured_speed:");
         Serial.print(speed * 1000.0f);
+        Serial.print(",mag_speed:");
+        Serial.print(magSpeed * 1000.0f);
         Serial.print(",target_current:");
         Serial.print(SetTorqueCurrent);
         Serial.print(",measured_current:");
@@ -197,7 +240,7 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
     double stepIntervalSeconds = 1.0 / stepperSpeed;                        // Calculate interval between steps in seconds
 
     // Check if it's time to update the layer number and reverse direction
-    if (digitalRead(limitSwitchLowPin) == HIGH && digitalRead(limitSwitchHighPin) == LOW) {                               // If limit switch is triggered, reverse direction
+    if (digitalRead(limitSwitchPin) == LOW) {                               // If limit switch is triggered, reverse direction
         layerNumber++;
         stepDirection = !stepDirection;                                     // Reverse direction for next layer
         digitalWrite(dirPin, stepDirection);                                // Set direction
@@ -233,6 +276,19 @@ void initI2CPeripherals() {
       delay(10);
     }
   }
+
+    as5600Available = as5600.begin();
+    if (as5600Available) {
+        prevAs5600Angle = as5600.getAngle();
+        prevAs5600Time = millis();
+        if (!as5600InitPrinted) {
+            Serial.println("AS5600 initialized.");
+            as5600InitPrinted = true;
+        }
+    } else if (!as5600InitPrinted) {
+        Serial.println("AS5600 not found, mag speed disabled.");
+        as5600InitPrinted = true;
+    }
 }
 
 /// @brief Set pin modes for stepper control, limit switch, and motor control pins.
@@ -266,7 +322,7 @@ void pinSetup() {
 void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
     Serial.println("Starting no-load current calibration and guide homing...");    
     // Non-blocking calibration state and functions
-    bool calibrated = true;
+    bool calibrated = false;
     bool homed = false;
 
     unsigned long calibStartTime = millis();
@@ -303,7 +359,7 @@ void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
         }
         // Handle homing towards the limit switch
         if (!homed) {
-            if (digitalRead(limitSwitchLowPin) == HIGH && digitalRead(limitSwitchHighPin) == LOW) { // If limit switch is not triggered, continue homing
+            if (digitalRead(limitSwitchPin) == HIGH) { // If limit switch is not triggered, continue homing
                 if (microsCurrent - microsPrevStep >= ApproachStepInterval) {
                     digitalWrite(stepPin, !digitalRead(stepPin)); // Toggle step pin
                 }
