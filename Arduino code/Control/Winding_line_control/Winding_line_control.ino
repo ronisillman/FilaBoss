@@ -24,7 +24,8 @@ PID RollerPID(12000, 6000, 300);
 #define stepPin 9
 #define dirPin 8
 #define enablePin 5
-#define limitSwitchPin 6
+#define limitSwitchLowPin 12
+#define LimitSwitchHighPin 13
 #define encoderPinA 2 // CLK pin
 #define encoderPinB 4 // DT pin
 #define potPin A3 // Potentiometer for testing speed control
@@ -106,10 +107,11 @@ void setup() {
     
     // Set output limits for PID controllers
     SpoolPID.setOutputLimits(0, DAC_maxValue); // Set output limits for spool motor control
-    RollerPID.setOutputLimits(0, DAC_maxValue); // Set output limits for roller motor control
+    //12V motor
+    RollerPID.setOutputLimits(0, DAC_maxValue/2); // Set output limits for roller motor control
 
     // Run calibration 
-    //HomingAndCalibration(5000, 100); // Run calibration for 5 seconds per motor, sampling every 100 ms
+    HomingAndCalibration(5000, 100); // Run calibration for 5 seconds per motor, sampling every 100 ms
 
     //New speed mesurement test
     lastAState = digitalRead(encoderPinA);
@@ -124,8 +126,8 @@ void loop() {
 
     updateMeasurements(); // Update Speed and Current measurements 
 
-    //stepperControl(microsCurrent, speed);
-
+    stepperControl(microsCurrent, speed);
+    
     potSpeedControl(); // Update target speed based on potentiometer reading
     potCurrentControl(); // Update target current based on potentiometer reading
     motorControl(targetSpeed, speed);
@@ -195,7 +197,7 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
     double stepIntervalSeconds = 1.0 / stepperSpeed;                        // Calculate interval between steps in seconds
 
     // Check if it's time to update the layer number and reverse direction
-    if (digitalRead(limitSwitchPin) == LOW) {                               // If limit switch is triggered, reverse direction
+    if (digitalRead(limitSwitchLowPin) == HIGH && digitalRead(limitSwitchHighPin) == LOW) {                               // If limit switch is triggered, reverse direction
         layerNumber++;
         stepDirection = !stepDirection;                                     // Reverse direction for next layer
         digitalWrite(dirPin, stepDirection);                                // Set direction
@@ -264,7 +266,7 @@ void pinSetup() {
 void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
     Serial.println("Starting no-load current calibration and guide homing...");    
     // Non-blocking calibration state and functions
-    bool calibrated = false;
+    bool calibrated = true;
     bool homed = false;
 
     unsigned long calibStartTime = millis();
@@ -301,7 +303,7 @@ void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
         }
         // Handle homing towards the limit switch
         if (!homed) {
-            if (digitalRead(limitSwitchPin) == HIGH) { // If limit switch is not triggered, continue homing
+            if (digitalRead(limitSwitchLowPin) == HIGH && digitalRead(limitSwitchHighPin) == LOW) { // If limit switch is not triggered, continue homing
                 if (microsCurrent - microsPrevStep >= ApproachStepInterval) {
                     digitalWrite(stepPin, !digitalRead(stepPin)); // Toggle step pin
                 }
