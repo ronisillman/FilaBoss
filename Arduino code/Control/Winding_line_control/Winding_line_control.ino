@@ -18,8 +18,8 @@ PID RollerPID(10000, 3000, 5.0); // for 12v dc motor
 // Board constants and variables
 #define ADC_bits 10.0
 #define DAC_bits 8.0
-#define ADC_maxValue 1023.0
-#define DAC_maxValue 255.0
+const static float ADC_maxValue = pow(2, ADC_bits) - 1; // 1023 for 10-bit ADC
+const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 
 //pin setup
 #define motorRollerPin 5
@@ -33,20 +33,18 @@ PID RollerPID(10000, 3000, 5.0); // for 12v dc motor
 #define potPin A3 // Potentiometer for testing speed control
 #define potCurrentPin A2 // Potentiometer for target current control
 
-#define stepSize 1.0 //degrees per step
-#define microsteps 128.0 //microsteps per full step
+#define stepSize 20.0 //degrees per step
+#define microsteps 16 //microsteps per full step
 #define gearRatio 100.0
-#define stepsPerRevolution 360.0/(stepSize/microsteps)
+
 #define leadScrewPitch 0.005 //m per revolution
 #define ApproachStepInterval 1000.0 // microseconds between steps
-
-#define stepsPerMM stepsPerRevolution/leadScrewPitch
 
 #define guideMaxPosition 0.05 //m, maximum position of the filament guide
 #define spoolRadius 0.053 //m, start radius of the filament spool
 #define filamentDiameter 0.00285 //m, diameter of the filament
 #define spoolWidth 0.045 //m, width of the filament spool
-#define ratio filamentDiameter/leadScrewPitch //gear ratio between spool and guide, set to 1 for direct drive
+
 #define rollerRadius 0.0119 //m, radius of the roller in contact with the filament, used for speed calculation
 #define encoderEdgesPerPulse 2.0 // encoderPinA interrupt on CHANGE counts both rising and falling edges
 
@@ -57,8 +55,12 @@ PID RollerPID(10000, 3000, 5.0); // for 12v dc motor
 #define CurrentfilterAlpha 0.02 // Smoothing factor for current measurements
 #define SpeedFilterAlpha 0.03 // Smoothing factor for speed measurements
 
-double guidePosition = 0.0; //m, current position of the filament guide
-int layerNumber = 0; //current layer number, used for testing
+
+const static double stepsPerRevolution = 360.0/(stepSize/microsteps);
+const static double ratio = filamentDiameter/leadScrewPitch; //gear ratio between spool and guide, set to 1 for direct drive
+
+volatile double guidePosition = 0.0; //m, current position of the filament guide
+volatile int layerNumber = 0; //current layer number, used for testing
 
 //Test parameters   
 float targetSpeed = 0.02; //m/s, desired filament speed
@@ -69,22 +71,22 @@ float noLoadCurrent_Spool = 0.0; //mA, base no-load current for spool motor
 float SpoolMotorCurrent = 0.0; //mA, current measurement for spool motor
 
 // Stepper timing variables
-int stepDirection = LOW;
+volatile int stepDirection = LOW;
 unsigned long microsPrevStep = 0;
 
 double speed = 0.0; //m/s, current speed of the filament, calculated from encoder counts
+volatile double stepperSpeed = 0.0; // steps per second, for diagnostics
 
 //Testing new speed measurement
 volatile long encoderTicks = 0;
 volatile uint8_t lastAState = 0;
-unsigned long speedSamplePrevMs = 0;
-long prevTicksForSpeed = 0;
 
 // timing variable
 unsigned long lastDiagnoseTime = 0;
 unsigned long lastEncoderPeriod = 0;
 unsigned long encoderPrevTime = 0;
-unsigned long limit_triggered = 0;
+volatile unsigned long limit_triggered = 0;
+bool interruptAttached = true; // Track interrupt attachment state
 
 // AS5600 magnetometer speed estimate (same shaft as roller)
 bool as5600Available = false;
@@ -144,8 +146,10 @@ void loop() {
     potCurrentControl(); // Update target current based on potentiometer reading
     motorControl(targetSpeed, speed);
     diagnose(1000); // Print diagnostics every 1000 ms (1 second)
-    if (currentMillis - limit_triggered >= 500){
-    attachInterrupt(digitalPinToInterrupt(limitSwitchHighPin), StepperLimit, CHANGE);
+    // Re-attach interrupt after debounce period, but only if not already attached
+    if (currentMillis - limit_triggered >= 500 && !interruptAttached){
+        attachInterrupt(digitalPinToInterrupt(limitSwitchHighPin), StepperLimit, CHANGE);
+        interruptAttached = true;
     }
 }
 
@@ -237,7 +241,8 @@ void diagnose(unsigned long interval) {
         Serial.print(guidePosition);
         Serial.print(", Stp Dir: ");
         Serial.print(stepDirection);
-        Serial.print(", Step speed");
+        Serial.print(", Step speed: ");
+        Serial.print(stepperSpeed);
 
         Serial.println(); // Newline for serial plotter
     }
@@ -253,10 +258,11 @@ void motorControl(float setSpeed, float actualSpeed) {
     float torqueCurrent = SpoolMotorCurrent - noLoadCurrent_Spool*SpoolPID.getOutput()/DAC_maxValue; // Subtract scaled no-load current from actual current to get torque-related current for spool
     
     SpoolPID.setSetpoint(SetTorqueCurrent); // Set current setpoint for spool PID
-    RollerPID.setSetpoint(setSpeed); // Set speed setpoint for roller PID (converted to mm/s for better resolution)
+    RollerPID.setSetpoint(setSpeed); // Set speed setpoint for roller PID
+
     // Update PID controllers
-    int controlSignal_Spool = SpoolPID.compute(SpoolMotorCurrent);
-    int controlSignal_Roller = RollerPID.compute(actualSpeed); // Compute control signal for roller PID (converted to mm/s for better resolution)
+    int controlSignal_Spool = SpoolPID.compute(torqueCurrent);
+    int controlSignal_Roller = RollerPID.compute(actualSpeed);
 
     analogWrite(motorRollerPin, controlSignal_Roller);
     analogWrite(motorSpoolPin, controlSignal_Spool);
@@ -268,7 +274,7 @@ void motorControl(float setSpeed, float actualSpeed) {
 void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
     double spoolOmega = filamentSpeed / (spoolRadius+layerNumber*filamentDiameter); // Calculate angular speed of the spool
     double guideOmega = spoolOmega * ratio;                                 // Calculate the required angular speed of the guide
-    double stepperSpeed = guideOmega/(2.0 * PI) * stepsPerRevolution;       // Convert to steps per second
+    stepperSpeed = guideOmega/(2.0 * PI) * stepsPerRevolution;       // Convert to steps per second
     double stepIntervalSeconds = 1.0 / stepperSpeed;                        // Calculate interval between steps in seconds
 
     if (guidePosition >= guideMaxPosition) {
@@ -282,7 +288,7 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
         unsigned int state = digitalRead(stepPin);
         digitalWrite(stepPin, !state); // Toggle step pin
         microsPrevStep = microsCurrent;
-        if (!state == HIGH) { // Only count steps on the rising edge
+        if (state == HIGH) { // Only count steps on the rising edge
             if (stepDirection == HIGH) {
                 guidePosition += leadScrewPitch / stepsPerRevolution; // Update guide position
             } else {
@@ -294,13 +300,14 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
 
 void StepperLimit(){
     if (digitalRead(limitSwitchLowPin) == HIGH){      
-    Serial.print("limit switch triggered!");
+    Serial.println("limit switch triggered!");
     stepDirection = HIGH;
     guidePosition = 0.0;
     layerNumber++;
     digitalWrite(dirPin, stepDirection);
     limit_triggered = millis();
     detachInterrupt(limitSwitchHighPin);
+    interruptAttached = false; // Mark interrupt as detached
     }
 }
 
@@ -405,7 +412,7 @@ void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
                 homed = true; // Limit switch triggered, homing complete
                 Serial.println("Homing complete.");
                 stepDirection = !stepDirection; 
-                digitalWrite(stepPin, stepDirection); // Set direction for normal operation
+                digitalWrite(dirPin, stepDirection); // Set direction for normal operation
             }
         }
         microsPrevStep = microsCurrent;
@@ -463,6 +470,9 @@ void encoderISR() {
     uint8_t b = digitalRead(encoderPinB);
 
     if (a != lastAState) {
+        // Prevent overflow by resetting counter periodically
+        if (abs(encoderTicks) > 1000000L) encoderTicks = 0;
+        
         encoderTicks += (b != a) ? 1 : -1;  // quadrature direction
         lastAState = a;
 
