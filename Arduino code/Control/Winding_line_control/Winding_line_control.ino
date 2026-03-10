@@ -229,10 +229,14 @@ void diagnose(unsigned long interval) {
         Serial.print(SetTorqueCurrent);
         Serial.print(",measured_current:");
         Serial.print(SpoolMotorCurrent);
+        Serial.print(",stpr pos: ")
+        Serial.print(guidePosition)
+        /*
         Serial.print(",limit_switch:");
         Serial.print(digitalRead(limitSwitchHighPin));
         Serial.print(",limit_switch_low:");
         Serial.print(digitalRead(limitSwitchLowPin));
+        */
         Serial.println(); // Newline for serial plotter
     }
 }
