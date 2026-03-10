@@ -33,9 +33,10 @@ PID RollerPID(10000, 3000, 5.0); // for 12v dc motor
 #define potPin A3 // Potentiometer for testing speed control
 #define potCurrentPin A2 // Potentiometer for target current control
 
-#define stepSize 20.0 //degrees per step
-#define microsteps 32.0 //microsteps per full step
-#define stepsPerRevolution 360.0*microsteps/stepSize
+#define stepSize 1.0 //degrees per step
+#define microsteps 128.0 //microsteps per full step
+#define gearRatio 100.0
+#define stepsPerRevolution 360.0/(stepSize/microsteps)
 #define leadScrewPitch 0.005 //m per revolution
 #define ApproachStepInterval 1000.0 // microseconds between steps
 
@@ -232,10 +233,12 @@ void diagnose(unsigned long interval) {
         Serial.print(",measured_current:");
         Serial.print(SpoolMotorCurrent);
         */
-        //Serial.print(",stpr pos: ");
-        //Serial.print(guidePosition);
-        //Serial.print(", Stp Dir: ");
-        //Serial.print(stepDirection);
+        Serial.print(",stpr pos: ");
+        Serial.print(guidePosition);
+        Serial.print(", Stp Dir: ");
+        Serial.print(stepDirection);
+        Serial.print(", Step speed");
+
         Serial.println(); // Newline for serial plotter
     }
 }
@@ -275,11 +278,11 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
     }
 
     // Handle stepper motor movement (non-blocking)
-    if (microsCurrent - microsPrevStep >= (unsigned long)((1000000.0*stepIntervalSeconds)/2.0)) { // Toggle step pin at half the interval for proper timing
+    if (microsCurrent - microsPrevStep >= (unsigned long)(1000000.0*stepIntervalSeconds*0.5)) { // Toggle step pin at half the interval for proper timing
         unsigned int state = digitalRead(stepPin);
         digitalWrite(stepPin, !state); // Toggle step pin
         microsPrevStep = microsCurrent;
-        if (state == HIGH) { // Only count steps on the rising edge
+        if (!state == HIGH) { // Only count steps on the rising edge
             if (stepDirection == HIGH) {
                 guidePosition += leadScrewPitch / stepsPerRevolution; // Update guide position
             } else {
