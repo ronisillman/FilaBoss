@@ -12,7 +12,8 @@ Adafruit_AS5600 as5600;
 PID SpoolPID(7000, 2500, 5.0);
 //PID RollerPID(1000, 0.3, 0.0); // Initialize PID controller with example gains
 //PID RollerPID(12000, 6000, 300); // for 24 VDC motor
-PID RollerPID(5000, 1500, 5.0); // for 12v dc motor
+//PID RollerPID(5000, 1500, 5.0); // for 12v dc motor
+PID RollerPID(10000, 3000, 5.0); // for 12v dc motor
 
 // Board constants and variables
 #define ADC_bits 10.0
@@ -104,7 +105,7 @@ double magnetometerSpeed = 0.0; // m/s
 
 void setup() {
 
-    Serial.begin(9600);
+    Serial.begin(115200);
     while (!Serial) {
         delay(10); // wait for serial port to connect. Needed for native USB port only
     }
@@ -128,7 +129,6 @@ void setup() {
     encoderPrevTime = millis(); // Initialize encoder timestamp to current time
     lastEncoderPeriod = 100; // Initialize to reasonable default period (~10 Hz)
     prevAs5600Time = millis();
-
 }
 
 void loop() {
@@ -225,17 +225,17 @@ void diagnose(unsigned long interval) {
         Serial.print(targetSpeed * 1000.0f);
         Serial.print(",measured_speed:");
         Serial.print(speed * 1000.0f);
-        Serial.print(",mag_speed:");
-        Serial.print(magnetometerSpeed * 1000.0f);
+        //Serial.print(",mag_speed:");
+        //Serial.print(magnetometerSpeed * 1000.0f);
         Serial.print(",target_current:");
         Serial.print(SetTorqueCurrent);
         Serial.print(",measured_current:");
         Serial.print(SpoolMotorCurrent);
         */
-        Serial.print(",stpr pos: ");
-        Serial.print(guidePosition);
-        Serial.print(", Stp Dir: ");
-        Serial.print(stepDirection);
+        //Serial.print(",stpr pos: ");
+        //Serial.print(guidePosition);
+        //Serial.print(", Stp Dir: ");
+        //Serial.print(stepDirection);
         Serial.println(); // Newline for serial plotter
     }
 }
@@ -446,6 +446,7 @@ void updateMeasurements() {
 void potSpeedControl() {
     float potValue = analogRead(potPin); // Read potentiometer value (0-1023)
     targetSpeed = ((ADC_maxValue - potValue) / ADC_maxValue) * 0.03; // Inverted map: 0.01-0.02 m/s
+    //targetSpeed = 0.02;
 }
 
 void potCurrentControl() {
