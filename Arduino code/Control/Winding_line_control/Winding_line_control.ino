@@ -21,21 +21,20 @@ PID RollerPID(5000, 1500, 5.0); // for 12v dc motor
 #define DAC_maxValue 255.0
 
 //pin setup
-#define motorRollerPin 3
+#define motorRollerPin 5
 #define motorSpoolPin 11
 #define stepPin 9
 #define dirPin 8
-#define enablePin 5
-#define limitSwitchLowPin 12
-#define limitSwitchHighPin 13
+#define limitSwitchLowPin 7     //Normally LOw
+#define limitSwitchHighPin 3 //Normally HIGH
 #define encoderPinA 2 // CLK pin
 #define encoderPinB 4 // DT pin
 #define potPin A3 // Potentiometer for testing speed control
 #define potCurrentPin A2 // Potentiometer for target current control
 
 #define stepSize 20.0 //degrees per step
-#define microsteps 16.0 //microsteps per full step
-#define stepsPerRevolution 360.0/stepSize*microsteps
+#define microsteps 32.0 //microsteps per full step
+#define stepsPerRevolution 360.0*microsteps/stepSize
 #define leadScrewPitch 0.005 //m per revolution
 #define ApproachStepInterval 1000.0 // microseconds between steps
 
@@ -83,6 +82,7 @@ long prevTicksForSpeed = 0;
 unsigned long lastDiagnoseTime = 0;
 unsigned long lastEncoderPeriod = 0;
 unsigned long encoderPrevTime = 0;
+unsigned long limit_triggered = 0;
 
 // AS5600 magnetometer speed estimate (same shaft as roller)
 bool as5600Available = false;
@@ -128,7 +128,7 @@ void setup() {
     encoderPrevTime = millis(); // Initialize encoder timestamp to current time
     lastEncoderPeriod = 100; // Initialize to reasonable default period (~10 Hz)
     prevAs5600Time = millis();
-    attachInterrupt(digitalPinToInterrupt(encoderPinA), encoderISR, CHANGE);
+
 }
 
 void loop() {
@@ -139,12 +139,13 @@ void loop() {
     measureMagnetometerSpeed(); // Keep AS5600 speed updated at loop rate
 
     stepperControl(microsCurrent, speed);
-    //stepperConstantSpeedControl(microsCurrent, 2000.0f, HIGH); // Test constant speed control at 200 steps/s in forward direction
     potSpeedControl(); // Update target speed based on potentiometer reading
     potCurrentControl(); // Update target current based on potentiometer reading
     motorControl(targetSpeed, speed);
     diagnose(1000); // Print diagnostics every 1000 ms (1 second)
-
+    if (currentMillis - limit_triggered >= 500){
+    attachInterrupt(digitalPinToInterrupt(limitSwitchHighPin), StepperLimit, CHANGE);
+    }
 }
 
 double measureMagnetometerSpeed() {
@@ -217,8 +218,9 @@ void diagnose(unsigned long interval) {
         Serial.print(" | Layer Number: ");
         Serial.print(layerNumber);
         // Add more diagnostic information as needed
-        Serial.println(); */
+        Serial.println();
         // These four for PID plotting in the serial plotter
+        
         Serial.print("speed_target:");
         Serial.print(targetSpeed * 1000.0f);
         Serial.print(",measured_speed:");
@@ -229,17 +231,15 @@ void diagnose(unsigned long interval) {
         Serial.print(SetTorqueCurrent);
         Serial.print(",measured_current:");
         Serial.print(SpoolMotorCurrent);
-        Serial.print(",stpr pos: ")
-        Serial.print(guidePosition)
-        /*
-        Serial.print(",limit_switch:");
-        Serial.print(digitalRead(limitSwitchHighPin));
-        Serial.print(",limit_switch_low:");
-        Serial.print(digitalRead(limitSwitchLowPin));
         */
+        Serial.print(",stpr pos: ");
+        Serial.print(guidePosition);
+        Serial.print(", Stp Dir: ");
+        Serial.print(stepDirection);
         Serial.println(); // Newline for serial plotter
     }
 }
+
 
 /// @brief 
 /// @param setSpeed Desired speed for the roller motor in m/s, used to calculate the speed error for the PID controller.
@@ -268,24 +268,18 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
     double stepperSpeed = guideOmega/(2.0 * PI) * stepsPerRevolution;       // Convert to steps per second
     double stepIntervalSeconds = 1.0 / stepperSpeed;                        // Calculate interval between steps in seconds
 
-    // Check if it's time to update the layer number and reverse direction
-    if (digitalRead(limitSwitchHighPin) == LOW && digitalRead(limitSwitchLowPin) == HIGH) {                               // If limit switch is triggered, reverse direction
+    if (guidePosition >= guideMaxPosition) {
         layerNumber++;
-        stepDirection = !stepDirection;                                     // Reverse direction for next layer
-        digitalWrite(dirPin, stepDirection);                                // Set direction
-        guidePosition = 0.0;                                                // Reset guide position to 0 when limit switch is triggered    
-    }
-    else if (guidePosition >= guideMaxPosition) {
-        layerNumber++;
-        stepDirection = !stepDirection; // Reverse direction for next layer
+        stepDirection = LOW; // Reverse direction for next layer
         digitalWrite(dirPin, stepDirection); // Set direction
     }
 
     // Handle stepper motor movement (non-blocking)
-    if (microsCurrent - microsPrevStep >= stepIntervalSeconds/2) { // Toggle step pin at half the interval for proper timing
-        digitalWrite(stepPin, !digitalRead(stepPin)); // Toggle step pin
+    if (microsCurrent - microsPrevStep >= (unsigned long)((1000000.0*stepIntervalSeconds)/2.0)) { // Toggle step pin at half the interval for proper timing
+        unsigned int state = digitalRead(stepPin);
+        digitalWrite(stepPin, !state); // Toggle step pin
         microsPrevStep = microsCurrent;
-        if (digitalRead(stepPin) == HIGH) { // Only count steps on the rising edge
+        if (state == HIGH) { // Only count steps on the rising edge
             if (stepDirection == HIGH) {
                 guidePosition += leadScrewPitch / stepsPerRevolution; // Update guide position
             } else {
@@ -295,30 +289,15 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
     }
 }
 
-/// @brief Simple non-blocking constant-speed stepper control for testing.
-/// @param microsCurrent Current time from micros().
-/// @param stepsPerSecond Target step rate in steps/s.
-/// @param direction HIGH/LOW direction for dir pin.
-void stepperConstantSpeedControl(unsigned long microsCurrent, float stepsPerSecond, int direction) {
-    static unsigned long prevToggleMicros = 0;
-    static int stepState = LOW;
-
-    if (stepsPerSecond <= 0.0f) {
-        digitalWrite(stepPin, LOW);
-        return;
-    }
-
-    digitalWrite(dirPin, direction);
-
-    unsigned long toggleIntervalMicros = (unsigned long)(500000.0f / stepsPerSecond);
-    if (toggleIntervalMicros < 1) {
-        toggleIntervalMicros = 1;
-    }
-
-    if (microsCurrent - prevToggleMicros >= toggleIntervalMicros) {
-        stepState = !stepState;
-        digitalWrite(stepPin, stepState);
-        prevToggleMicros = microsCurrent;
+void StepperLimit(){
+    if (digitalRead(limitSwitchLowPin) == HIGH){      
+    Serial.print("limit switch triggered!");
+    stepDirection = HIGH;
+    guidePosition = 0.0;
+    layerNumber++;
+    digitalWrite(dirPin, stepDirection);
+    limit_triggered = millis();
+    detachInterrupt(limitSwitchHighPin);
     }
 }
 
@@ -352,9 +331,9 @@ void pinSetup() {
 
     pinMode(stepPin, OUTPUT);
     pinMode(dirPin, OUTPUT);
-    pinMode(enablePin, OUTPUT);
     pinMode(limitSwitchLowPin, INPUT_PULLUP);
     pinMode(limitSwitchHighPin, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(limitSwitchHighPin), StepperLimit, CHANGE);
 
     pinMode(motorRollerPin, OUTPUT);
     pinMode(motorSpoolPin, OUTPUT);
@@ -390,8 +369,6 @@ void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
 
     stepDirection = LOW; // Set initial direction towards the limit switch
     digitalWrite(dirPin, stepDirection); // Set direction towards the limit switch
-    digitalWrite(enablePin, HIGH); // Enable the stepper driver
-
     analogWrite(motorSpoolPin, DAC_maxValue); // Run spool at full speed for calibration
 
     while (!calibrated || !homed) {
