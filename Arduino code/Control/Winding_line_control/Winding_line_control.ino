@@ -12,8 +12,8 @@ Adafruit_AS5600 as5600;
 PID SpoolPID(7000, 2500, 5.0);
 //PID RollerPID(1000, 0.3, 0.0); // Initialize PID controller with example gains
 //PID RollerPID(12000, 6000, 300); // for 24 VDC motor
-//PID RollerPID(5000, 1500, 5.0); // for 12v dc motor
-PID RollerPID(10000, 3000, 5.0); // for 12v dc motor
+PID RollerPID(5000, 1500, 5.0); // for 12v dc motor
+//PID RollerPID(10000, 3000, 5.0); // for 12v dc motor
 
 // Board constants and variables
 #define ADC_bits 10.0
@@ -33,9 +33,8 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 #define potPin A3 // Potentiometer for testing speed control
 #define potCurrentPin A2 // Potentiometer for target current control
 
-#define stepSize 20.0 //degrees per step
-#define microsteps 16 //microsteps per full step
-#define gearRatio 100.0
+#define stepsPerRev 20.0 // steps per revolution
+#define microsteps 16.0 //microsteps per full step
 
 #define leadScrewPitch 0.005 //m per revolution
 #define ApproachStepInterval 1000.0 // microseconds between steps
@@ -56,7 +55,7 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 #define SpeedFilterAlpha 0.03 // Smoothing factor for speed measurements
 
 
-const static double stepsPerRevolution = 360.0/(stepSize/microsteps);
+const static double stepsPerRevolution = stepsPerRev*microsteps;
 const static double ratio = filamentDiameter/leadScrewPitch; //gear ratio between spool and guide, set to 1 for direct drive
 
 volatile double guidePosition = 0.0; //m, current position of the filament guide
@@ -275,7 +274,7 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
     double spoolOmega = filamentSpeed / (spoolRadius+layerNumber*filamentDiameter); // Calculate angular speed of the spool
     double guideOmega = spoolOmega * ratio;                                 // Calculate the required angular speed of the guide
     stepperSpeed = guideOmega/(2.0 * PI) * stepsPerRevolution;       // Convert to steps per second
-    double stepIntervalSeconds = 1.0 / stepperSpeed;                        // Calculate interval between steps in seconds
+    double stepIntervalSeconds = 1.0 / (stepperSpeed);                        // Calculate interval between steps in seconds
 
     if (guidePosition >= guideMaxPosition) {
         layerNumber++;
