@@ -1,7 +1,7 @@
 M48
-; DRILL file {KiCad 9.0.7} date 2026-03-17T14:13:43+0200
+; DRILL file {KiCad 9.0.7} date 2026-03-18T16:20:16+0200
 ; FORMAT={-:-/ absolute / metric / decimal}
-; #@! TF.CreationDate,2026-03-17T14:13:43+02:00
+; #@! TF.CreationDate,2026-03-18T16:20:16+02:00
 ; #@! TF.GenerationSoftware,Kicad,Pcbnew,9.0.7
 ; #@! TF.FileFunction,MixedPlating,1,2
 FMAT,2
@@ -14,24 +14,26 @@ T2C0.750
 T3C0.800
 ; #@! TA.AperFunction,Plated,PTH,ComponentDrill
 T4C0.900
-; #@! TA.AperFunction,Plated,PTH,ViaDrill
-T5C1.000
 ; #@! TA.AperFunction,Plated,PTH,ComponentDrill
+T5C0.950
+; #@! TA.AperFunction,Plated,PTH,ViaDrill
 T6C1.000
 ; #@! TA.AperFunction,Plated,PTH,ComponentDrill
-T7C1.100
+T7C1.000
 ; #@! TA.AperFunction,Plated,PTH,ComponentDrill
-T8C1.170
+T8C1.100
 ; #@! TA.AperFunction,Plated,PTH,ComponentDrill
-T9C1.200
+T9C1.170
 ; #@! TA.AperFunction,Plated,PTH,ComponentDrill
-T10C1.600
+T10C1.200
+; #@! TA.AperFunction,Plated,PTH,ComponentDrill
+T11C1.600
 ; #@! TA.AperFunction,Plated,PTH,ViaDrill
-T11C2.000
+T12C2.000
 ; #@! TA.AperFunction,Plated,PTH,ViaDrill
-T12C3.200
+T13C3.200
 ; #@! TA.AperFunction,NonPlated,NPTH,ComponentDrill
-T13C2.032
+T14C2.032
 %
 G90
 G05
@@ -90,11 +92,17 @@ X53.34Y-95.25
 X73.66Y-93.98
 X83.82Y-93.98
 T5
+X102.91Y-144.78
+X105.41Y-144.78
+X107.91Y-144.78
+X110.41Y-144.78
+T6
 X60.96Y-91.44
+X97.79Y-141.605
 X104.14Y-104.14
 X123.825Y-96.52
 X124.92Y-128.27
-T6
+T7
 X54.61Y-113.03
 X57.23Y-105.41
 X62.23Y-105.41
@@ -149,32 +157,39 @@ X111.76Y-114.3
 X111.76Y-137.16
 X114.3Y-114.3
 X114.3Y-137.16
-T7
+T8
 X58.42Y-91.44
 X58.42Y-93.98
 X58.42Y-96.52
 X63.5Y-91.44
 X63.5Y-93.98
 X63.5Y-96.52
-T8
+T9
 X40.72Y-118.09
 X40.72Y-135.89
 X45.72Y-118.09
 X45.72Y-135.89
-T9
+T10
+X64.77Y-144.78
+X67.31Y-144.78
+X76.2Y-142.24
+X78.74Y-142.24
+X81.28Y-142.24
+X90.17Y-144.78
+X92.71Y-144.78
 X120.65Y-91.44
 X123.19Y-91.44
-T10
+T11
 X49.53Y-127.0
 X62.53Y-127.0
-T11
-X49.53Y-118.11
 T12
-X40.64Y-88.9
-X40.64Y-140.97
-X125.73Y-101.6
-X125.73Y-140.97
+X49.53Y-118.11
 T13
+X40.64Y-88.9
+X40.64Y-147.32
+X125.73Y-101.6
+X125.73Y-147.32
+T14
 X43.43Y-107.95
 X48.002Y-107.95
 M30

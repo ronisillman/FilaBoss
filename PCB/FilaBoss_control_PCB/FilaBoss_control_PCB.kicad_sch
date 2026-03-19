@@ -195,6 +195,148 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "Converter_DCDC:R-78B12-2.0"
+			(pin_names
+				(offset 0.254)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "U"
+				(at -3.81 3.175 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "R-78B12-2.0"
+				(at 0 3.175 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Footprint" "Converter_DCDC:Converter_DCDC_RECOM_R-78B-2.0_THT"
+				(at 1.27 -6.35 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+						(italic yes)
+					)
+					(justify left)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" "https://www.recom-power.com/pdf/Innoline/R-78Bxx-2.0.pdf"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "2A Step-Down DC/DC-Regulator, 15-32V input, 12V fixed Output Voltage, LM78xx replacement, -40°C to +85°C, SIP3"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_keywords" "dc-dc recom Step-Down DC/DC-Regulator"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_fp_filters" "Converter*DCDC*RECOM*R*78B*2.0*"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "R-78B12-2.0_0_1"
+				(rectangle
+					(start -5.08 1.905)
+					(end 5.08 -5.08)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type background)
+					)
+				)
+			)
+			(symbol "R-78B12-2.0_1_1"
+				(pin power_in line
+					(at -7.62 0 0)
+					(length 2.54)
+					(name "IN"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin power_in line
+					(at 0 -7.62 90)
+					(length 2.54)
+					(name "GND"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin power_out line
+					(at 7.62 0 180)
+					(length 2.54)
+					(name "OUT"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "Converter_DCDC:R-78E5.0-0.5"
 			(pin_names
 				(offset 0.254)
@@ -4525,6 +4667,131 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "power:+12V"
+			(power)
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 0)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "#PWR"
+				(at 0 -3.81 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Value" "+12V"
+				(at 0 3.556 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "Power symbol creates a global label with name \"+12V\""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_keywords" "global power"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "+12V_0_1"
+				(polyline
+					(pts
+						(xy -0.762 1.27) (xy 0 2.54)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0 2.54) (xy 0.762 1.27)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0 0) (xy 0 2.54)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "+12V_1_1"
+				(pin power_in line
+					(at 0 0 90)
+					(length 0)
+					(name "~"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "power:+24V"
 			(power)
 			(pin_numbers
@@ -5259,6 +5526,12 @@
 		(uuid "01edbc1a-c7c3-4584-8d3c-589c0ecb7169")
 	)
 	(junction
+		(at 93.98 59.69)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "05191843-c14f-49df-b799-bf5f5d46372e")
+	)
+	(junction
 		(at 198.12 46.99)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -5269,6 +5542,18 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "0dcda402-f782-4efc-b395-a4eee13f2a39")
+	)
+	(junction
+		(at 69.85 59.69)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "0e881f77-93a4-47de-8a2f-74fe94af808b")
+	)
+	(junction
+		(at 140.97 36.83)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "0f7e1a58-30b5-4344-a4a1-f022c7f7a196")
 	)
 	(junction
 		(at 69.85 127)
@@ -5293,6 +5578,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "2a125e96-a3af-48a2-84ea-10c00816c0af")
+	)
+	(junction
+		(at 109.22 59.69)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "2b2bb297-3874-47d5-a753-bf241a0d06dc")
 	)
 	(junction
 		(at 82.55 127)
@@ -5480,6 +5771,16 @@
 	)
 	(wire
 		(pts
+			(xy 128.27 30.48) (xy 128.27 44.45)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "003d998e-dfa1-49be-a1e9-a5e0f9b737d7")
+	)
+	(wire
+		(pts
 			(xy 74.93 86.36) (xy 74.93 97.79)
 		)
 		(stroke
@@ -5500,6 +5801,16 @@
 	)
 	(wire
 		(pts
+			(xy 125.73 30.48) (xy 125.73 59.69)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "046caa3f-a4ec-461f-97b6-d550d32dc6bb")
+	)
+	(wire
+		(pts
 			(xy 185.42 29.21) (xy 185.42 33.02)
 		)
 		(stroke
@@ -5510,6 +5821,26 @@
 	)
 	(wire
 		(pts
+			(xy 140.97 30.48) (xy 140.97 36.83)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "098f735d-c424-460d-90e7-e29f1740d4e8")
+	)
+	(wire
+		(pts
+			(xy 69.85 59.69) (xy 69.85 73.66)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "0a534ede-c3a3-46cc-9188-15b1dbf9dca5")
+	)
+	(wire
+		(pts
 			(xy 255.27 118.11) (xy 255.27 119.38)
 		)
 		(stroke
@@ -5517,6 +5848,16 @@
 			(type default)
 		)
 		(uuid "0c597756-e98d-481c-a513-9c00fec7b1bc")
+	)
+	(wire
+		(pts
+			(xy 109.22 59.69) (xy 109.22 30.48)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "0e14fe37-9321-4b5b-9225-8ec5e358419f")
 	)
 	(wire
 		(pts
@@ -5587,6 +5928,16 @@
 			(type default)
 		)
 		(uuid "1b15f36e-b751-48aa-83c1-0cfcf675e0c4")
+	)
+	(wire
+		(pts
+			(xy 241.3 41.91) (xy 241.3 73.66)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "1b61d769-a3f7-48da-b90e-0d65db2b71d6")
 	)
 	(wire
 		(pts
@@ -5730,6 +6081,16 @@
 	)
 	(wire
 		(pts
+			(xy 93.98 59.69) (xy 109.22 59.69)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3994b431-7c7a-4165-b0b2-b2bae30a49ce")
+	)
+	(wire
+		(pts
 			(xy 328.93 68.58) (xy 328.93 85.09)
 		)
 		(stroke
@@ -5737,6 +6098,16 @@
 			(type default)
 		)
 		(uuid "3a2575fb-b2cd-4a65-83e9-7ce07f456d0a")
+	)
+	(wire
+		(pts
+			(xy 238.76 44.45) (xy 238.76 81.28)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3a2df52b-0532-4b1b-bfe3-89c8c11e91ed")
 	)
 	(wire
 		(pts
@@ -5777,6 +6148,26 @@
 			(type default)
 		)
 		(uuid "3ceb5472-09ad-41dc-b34f-9dbab1e4b694")
+	)
+	(wire
+		(pts
+			(xy 140.97 36.83) (xy 185.42 36.83)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "3d6af300-cbcd-4b2d-95a2-599e14854c6f")
+	)
+	(wire
+		(pts
+			(xy 130.81 41.91) (xy 241.3 41.91)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "400bf7c8-6cbf-4054-9371-c024640b34d6")
 	)
 	(wire
 		(pts
@@ -6280,6 +6671,16 @@
 	)
 	(wire
 		(pts
+			(xy 69.85 59.69) (xy 76.2 59.69)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "8a02080e-39ec-42bc-b291-9eeae550acfe")
+	)
+	(wire
+		(pts
 			(xy 187.96 29.21) (xy 187.96 78.74)
 		)
 		(stroke
@@ -6330,6 +6731,16 @@
 	)
 	(wire
 		(pts
+			(xy 128.27 44.45) (xy 238.76 44.45)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9325c64a-17d5-4d2d-8e67-07f87ab61133")
+	)
+	(wire
+		(pts
 			(xy 185.42 33.02) (xy 198.12 33.02)
 		)
 		(stroke
@@ -6357,6 +6768,16 @@
 			(type default)
 		)
 		(uuid "995b2390-8182-4a79-a257-a9831f592ae8")
+	)
+	(wire
+		(pts
+			(xy 91.44 59.69) (xy 93.98 59.69)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "996246e7-a347-4937-855c-1a06cb852e16")
 	)
 	(wire
 		(pts
@@ -6560,6 +6981,16 @@
 	)
 	(wire
 		(pts
+			(xy 130.81 30.48) (xy 130.81 41.91)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "bb7ff84f-62e1-4937-a0d9-8d5aade1e9be")
+	)
+	(wire
+		(pts
 			(xy 191.77 139.7) (xy 191.77 66.04)
 		)
 		(stroke
@@ -6587,6 +7018,26 @@
 			(type default)
 		)
 		(uuid "bc8c7df1-c7db-491a-a2c6-ec25608d6ddd")
+	)
+	(wire
+		(pts
+			(xy 241.3 73.66) (xy 232.41 73.66)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "bdfa9052-c72e-4a73-b1b6-799b18e53669")
+	)
+	(wire
+		(pts
+			(xy 125.73 59.69) (xy 109.22 59.69)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "bebf7b9b-2860-441c-8a64-28b718374a4a")
 	)
 	(wire
 		(pts
@@ -6727,6 +7178,16 @@
 			(type default)
 		)
 		(uuid "d4b8b3c3-b8e9-49b1-b4cf-dcf5d6ee5767")
+	)
+	(wire
+		(pts
+			(xy 232.41 81.28) (xy 238.76 81.28)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d5194eed-505a-4664-97f8-d5aa61c07732")
 	)
 	(wire
 		(pts
@@ -6890,7 +7351,7 @@
 	)
 	(wire
 		(pts
-			(xy 105.41 36.83) (xy 185.42 36.83)
+			(xy 105.41 36.83) (xy 140.97 36.83)
 		)
 		(stroke
 			(width 0)
@@ -6910,7 +7371,7 @@
 	)
 	(wire
 		(pts
-			(xy 69.85 36.83) (xy 69.85 73.66)
+			(xy 69.85 36.83) (xy 69.85 59.69)
 		)
 		(stroke
 			(width 0)
@@ -7289,6 +7750,72 @@
 		)
 	)
 	(symbol
+		(lib_id "power:GND")
+		(at 83.82 67.31 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "2bdcec89-f61d-4af7-88c3-cdcab87cde19")
+		(property "Reference" "#PWR021"
+			(at 83.82 73.66 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 83.82 72.39 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 83.82 67.31 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 83.82 67.31 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 83.82 67.31 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "814277ee-ecd1-4060-a59a-cfda8d4be58d")
+		)
+		(instances
+			(project "FilaBoss_control_PCB"
+				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
+					(reference "#PWR021")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Device:D")
 		(at 81.28 107.95 0)
 		(unit 1)
@@ -7568,6 +8095,79 @@
 			(project "FilaBoss_control_PCB"
 				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
 					(reference "#PWR06")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Converter_DCDC:R-78B12-2.0")
+		(at 83.82 59.69 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "42065392-175f-4d72-89ed-07ad1b5d7bb2")
+		(property "Reference" "U3"
+			(at 83.82 53.34 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "R-78B12-2.0"
+			(at 83.82 55.88 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Converter_DCDC:Converter_DCDC_RECOM_R-78B-2.0_THT"
+			(at 85.09 66.04 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+					(italic yes)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "https://www.recom-power.com/pdf/Innoline/R-78Bxx-2.0.pdf"
+			(at 83.82 59.69 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "2A Step-Down DC/DC-Regulator, 15-32V input, 12V fixed Output Voltage, LM78xx replacement, -40°C to +85°C, SIP3"
+			(at 83.82 59.69 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "1ef3e33a-9c66-4519-a452-d0c54fbcd681")
+		)
+		(pin "2"
+			(uuid "5124d54d-be7f-4911-b677-1bc275341125")
+		)
+		(pin "3"
+			(uuid "a6df19d8-e48a-4d6c-b2f6-231b582384d2")
+		)
+		(instances
+			(project "FilaBoss_control_PCB"
+				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
+					(reference "U3")
 					(unit 1)
 				)
 			)
@@ -8756,6 +9356,72 @@
 		)
 	)
 	(symbol
+		(lib_id "power:GND")
+		(at 123.19 30.48 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "84d0e03c-960f-4048-878c-ce9944b8aded")
+		(property "Reference" "#PWR025"
+			(at 123.19 36.83 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 123.19 35.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 123.19 30.48 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 123.19 30.48 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 123.19 30.48 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "1a4e56ce-2c9a-42fa-9587-90d580d185d8")
+		)
+		(instances
+			(project "FilaBoss_control_PCB"
+				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
+					(reference "#PWR025")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Converter_DCDC:R-78E5.0-0.5")
 		(at 83.82 36.83 0)
 		(unit 1)
@@ -8908,6 +9574,72 @@
 			(project "FilaBoss_control_PCB"
 				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
 					(reference "D2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 143.51 30.48 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "93ae1738-edd5-4fa3-8d43-f40b8c747df7")
+		(property "Reference" "#PWR023"
+			(at 143.51 36.83 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 143.51 35.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 143.51 30.48 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 143.51 30.48 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 143.51 30.48 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "09ec3109-2c33-4752-b455-194d23ac76a3")
+		)
+		(instances
+			(project "FilaBoss_control_PCB"
+				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
+					(reference "#PWR023")
 					(unit 1)
 				)
 			)
@@ -9571,6 +10303,72 @@
 		)
 	)
 	(symbol
+		(lib_id "power:+12V")
+		(at 93.98 59.69 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "b8b7dfe6-13ff-494a-b5bf-7e822bfe3ae3")
+		(property "Reference" "#PWR024"
+			(at 93.98 63.5 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "+12V"
+			(at 93.98 54.61 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 93.98 59.69 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 93.98 59.69 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"+12V\""
+			(at 93.98 59.69 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "c047f6f7-3fcd-44d7-9d82-f1951fcd7a50")
+		)
+		(instances
+			(project ""
+				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
+					(reference "#PWR024")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "power:GND")
 		(at 265.43 99.06 270)
 		(unit 1)
@@ -10177,6 +10975,90 @@
 		)
 	)
 	(symbol
+		(lib_id "PCM_SparkFun-Connector:Conn_01x04_JST_P2.0mm_Vertical_PTH")
+		(at 125.73 25.4 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "dd38ea8a-dfd5-45a2-8306-f6f4b4af5894")
+		(property "Reference" "J14"
+			(at 125.7299 22.86 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "Conn_01x04_Encoder"
+			(at 128.2699 22.86 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Connector_JST:JST_XA_B04B-XASK-1_1x04_P2.50mm_Vertical"
+			(at 135.89 25.4 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "https://www.sparkfun.com/datasheets/Prototyping/ePH.pdf"
+			(at 138.43 25.4 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Single row 4 pin connector"
+			(at 140.97 25.4 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "SparkFun" "PRT-09916"
+			(at 143.002 25.4 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "4"
+			(uuid "7813da3f-c376-4be4-99bd-06c61cef39bf")
+		)
+		(pin "2"
+			(uuid "dc23bb27-a82b-4ff3-891f-28b61e4d0318")
+		)
+		(pin "1"
+			(uuid "eacd3697-8910-449c-817e-b44f54e81ddc")
+		)
+		(pin "3"
+			(uuid "910787fc-c829-45d2-a05f-0549aa42faeb")
+		)
+		(instances
+			(project "FilaBoss_control_PCB"
+				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
+					(reference "J14")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "power:GND")
 		(at 248.92 34.29 0)
 		(unit 1)
@@ -10328,6 +11210,72 @@
 		)
 	)
 	(symbol
+		(lib_id "power:GND")
+		(at 111.76 30.48 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "e444820c-ab66-446b-9845-770f2af07065")
+		(property "Reference" "#PWR022"
+			(at 111.76 36.83 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 111.76 35.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 111.76 30.48 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 111.76 30.48 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 111.76 30.48 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "ee9235ac-80bb-4a48-a189-4a0ead02d0b6")
+		)
+		(instances
+			(project "FilaBoss_control_PCB"
+				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
+					(reference "#PWR022")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "PCM_SparkFun-Connector:Conn_01x02_JST_P2.0mm_Horizontal_SMD")
 		(at 271.78 43.18 0)
 		(mirror x)
@@ -10405,6 +11353,146 @@
 			(project "FilaBoss_control_PCB"
 				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
 					(reference "J11")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector:Screw_Terminal_01x02")
+		(at 109.22 25.4 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "ee734ae5-deda-4fec-a7c0-a1bb6811d4bc")
+		(property "Reference" "J12"
+			(at 114.3 25.4 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Value" "Screw_Terminal_01x02"
+			(at 102.87 22.86 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Footprint" "TerminalBlock:TerminalBlock_Xinya_XY308-2.54-2P_1x02_P2.54mm_Horizontal"
+			(at 114.3 27.9399 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 109.22 25.4 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Generic screw terminal, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)"
+			(at 109.22 25.4 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "b91194f4-f834-4c3a-9476-f45d2499e941")
+		)
+		(pin "2"
+			(uuid "043efa13-d51e-467d-967a-1b887e7f11b7")
+		)
+		(instances
+			(project "FilaBoss_control_PCB"
+				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
+					(reference "J12")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector:Screw_Terminal_01x02")
+		(at 140.97 25.4 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "f04b8d7a-081a-4c3b-9400-91848e74be9d")
+		(property "Reference" "J13"
+			(at 146.05 25.4 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Value" "Screw_Terminal_01x02"
+			(at 134.62 22.86 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Footprint" "TerminalBlock:TerminalBlock_Xinya_XY308-2.54-2P_1x02_P2.54mm_Horizontal"
+			(at 146.05 27.9399 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 140.97 25.4 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Generic screw terminal, single row, 01x02, script generated (kicad-library-utils/schlib/autogen/connector/)"
+			(at 140.97 25.4 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "b46c438f-f4f8-4d8e-b28c-a42f686dfedf")
+		)
+		(pin "2"
+			(uuid "16ca8cb5-05da-45da-8dd4-4cb0ecaf4d48")
+		)
+		(instances
+			(project "FilaBoss_control_PCB"
+				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
+					(reference "J13")
 					(unit 1)
 				)
 			)
