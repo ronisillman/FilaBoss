@@ -86,7 +86,7 @@ void setup() {
   digitalWrite(stepPin, LOW);
   digitalWrite(dirPin, stepDirection);
 
-  Serial.println("Press start button to begin...");
+/*   Serial.println("Press start button to begin...");
 
   // Wait for button press (active LOW) and release before starting.
   while (digitalRead(buttonPin) == HIGH) {
@@ -97,7 +97,7 @@ void setup() {
     delay(5);
   }
 
-  Serial.println("Standalone stepperControl test started.");
+  Serial.println("Standalone stepperControl test started."); */
 }
 
 void loop() {
