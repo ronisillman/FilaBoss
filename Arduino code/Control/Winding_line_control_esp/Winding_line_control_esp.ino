@@ -39,7 +39,7 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 #define leadScrewPitch 0.002 //m per revolution
 #define ApproachStepInterval 1000.0 // microseconds between steps
 
-#define guideMaxPosition 0.05 //m, maximum position of the filament guide
+#define guideMaxPosition 0.04 //m, maximum position of the filament guide
 #define spoolRadius 0.053 //m, start radius of the filament spool
 #define filamentDiameter 0.00285 //m, diameter of the filament
 #define spoolWidth 0.045 //m, width of the filament spool
@@ -53,6 +53,9 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 // Filter variables for measurment smoothing
 #define CurrentfilterAlpha 0.02 // Smoothing factor for current measurements
 #define SpeedFilterAlpha 0.03 // Smoothing factor for speed measurements
+
+void IRAM_ATTR StepperLimit();
+void IRAM_ATTR encoderISR();
 
 
 const static double stepsPerRevolution = stepsPerRev*microsteps;
@@ -86,6 +89,8 @@ unsigned long lastEncoderPeriod = 0;
 unsigned long encoderPrevTime = 0;
 volatile unsigned long limit_triggered = 0;
 bool interruptAttached = true; // Track interrupt attachment state
+volatile bool limitSwitchEvent = false;
+volatile bool encoderPulseEvent = false;
 
 // AS5600 magnetometer speed estimate (same shaft as roller)
 bool as5600Available = false;
@@ -133,6 +138,7 @@ void setup() {
     //HomingAndCalibration(5000, 100); // Run calibration for 5 seconds per motor, sampling every 100 ms
 
     //New speed mesurement test
+    delay(100); // Short delay to ensure everything is initialized before starting speed measurement
     lastAState = !digitalRead(encoderPinA);
     encoderPrevTime = millis(); // Initialize encoder timestamp to current time
     lastEncoderPeriod = 100; // Initialize to reasonable default period (~10 Hz)
@@ -150,8 +156,31 @@ void loop() {
     static unsigned long lastDiagnoseCallMs = 0;
 
     // Keep step generation in the fastest path for minimum timing jitter.
-    //stepperControl(microsCurrent, speed);
-    stepperControl(microsCurrent, 0.5); // Test with a constant speed command to verify stepper control independently of speed measurement
+    stepperControl(microsCurrent, speed);
+    //stepperControl(microsCurrent, 0.5); // Test with a constant speed command to verify stepper control independently of speed measurement
+
+    if (limitSwitchEvent) {
+        noInterrupts();
+        limitSwitchEvent = false;
+        interrupts();
+
+        if (digitalRead(limitSwitchLowPin) == HIGH) {
+            stepDirection = HIGH;
+            guidePosition = 0.0;
+            layerNumber++;
+            digitalWrite(dirPin, stepDirection);
+            limit_triggered = currentMillis;
+            detachInterrupt(digitalPinToInterrupt(limitSwitchHighPin));
+            interruptAttached = false; // Mark interrupt as detached
+        }
+    }
+
+    if (encoderPulseEvent) {
+        noInterrupts();
+        encoderPulseEvent = false;
+        interrupts();
+        updateSpeedByPulse();
+    }
 
     if (currentMillis - lastMeasurementMs >= MEASUREMENT_PERIOD_MS) {
         updateMeasurements(); // Update Speed and Current measurements
@@ -178,6 +207,7 @@ void loop() {
         diagnose(1000); // Print diagnostics every 1000 ms (1 second)
         lastDiagnoseCallMs = currentMillis;
     }
+
     // Re-attach interrupt after debounce period, but only if not already attached
     if (currentMillis - limit_triggered >= 500 && !interruptAttached){
         attachInterrupt(digitalPinToInterrupt(limitSwitchHighPin), StepperLimit, CHANGE);
@@ -268,7 +298,10 @@ void diagnose(unsigned long interval) {
         Serial.print(SetTorqueCurrent);
         Serial.print(",measured_current:");
         Serial.print(SpoolMotorCurrent);
-        
+        /* Serial.print(",limit switch high pin:");
+        Serial.print(digitalRead(limitSwitchHighPin));
+        Serial.print(",limit switch low pin:");
+        Serial.print(digitalRead(limitSwitchLowPin)); */
         /* Serial.print(",stpr pos: ");
         Serial.print(guidePosition);
         Serial.print(", Stp Dir: ");
@@ -345,17 +378,8 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
   }
 }
 
-void StepperLimit(){
-    if (digitalRead(limitSwitchLowPin) == HIGH){      
-    Serial.println("limit switch triggered!");
-    stepDirection = HIGH;
-    guidePosition = 0.0;
-    layerNumber++;
-    digitalWrite(dirPin, stepDirection);
-    limit_triggered = millis();
-    detachInterrupt(limitSwitchHighPin);
-    interruptAttached = false; // Mark interrupt as detached
-    }
+void IRAM_ATTR StepperLimit(){
+    limitSwitchEvent = true;
 }
 
 /// @brief Initialize I2C peripherals (current sensors) and check for their presence. If a sensor is not found, print an error message and halt execution.
@@ -395,9 +419,9 @@ void pinSetup() {
     pinMode(motorRollerPin, OUTPUT);
     pinMode(motorSpoolPin, OUTPUT);
 
-    pinMode (encoderPinA, INPUT_PULLUP);
+    pinMode (encoderPinA, INPUT);
     attachInterrupt(digitalPinToInterrupt(encoderPinA), encoderISR, CHANGE);
-    pinMode (encoderPinB, INPUT_PULLUP);
+    pinMode (encoderPinB, INPUT);
 
     pinMode(potPin, INPUT);
     pinMode(potCurrentPin, INPUT);
@@ -512,7 +536,7 @@ void potCurrentControl() {
 }
 
 // New speed measurement test
-void encoderISR() {
+void IRAM_ATTR encoderISR() {
     uint8_t a = !digitalRead(encoderPinA);
     uint8_t b = !digitalRead(encoderPinB);
 
@@ -522,9 +546,7 @@ void encoderISR() {
         
         encoderTicks += (b != a) ? 1 : -1;  // quadrature direction
         lastAState = a;
-
-        //TEST this:
-        updateSpeedByPulse(); // Update speed estimate on each pulse
+        encoderPulseEvent = true;
     }
 }
 
