@@ -29,8 +29,8 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 #define dirPin 26
 #define limitSwitchLowPin 27      // Normally LOW
 #define limitSwitchHighPin 14     // Normally HIGH
-#define encoderPinA 4             // CLK pin (PCNT-capable)
-#define encoderPinB 5             // DT pin (PCNT-capable)
+#define encoderPinA 4             // CLK pin (GPIO 4 - PCNT-compatible, serial-safe)
+#define encoderPinB 5             // DT pin (GPIO 5 - PCNT-compatible, serial-safe)
 #define potPin 34                 // ADC1 input
 #define potCurrentPin 35          // ADC1 input
 
@@ -46,7 +46,7 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 #define spoolWidth 0.045 //m, width of the filament spool
 
 #define rollerRadius 0.0119 //m, radius of the roller in contact with the filament, used for speed calculation
-#define encoderEdgesPerPulse 2.0 // encoderPinA interrupt on CHANGE counts both rising and falling edges
+#define encoderEdgesPerPulse 2.0 // A-channel CHANGE-equivalent edges per encoder pulse
 
 //#define encoderResolution 30.0 //pulses per revolution for the 
 #define encoderResolution 600.0 //pulses per revolution for the encoder, used for speed calculation
@@ -55,13 +55,11 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 #define CurrentfilterAlpha 0.02 // Smoothing factor for current measurements
 #define SpeedFilterAlpha 0.03 // Smoothing factor for speed measurements
 
-#define PCNT_UNIT_USED PCNT_UNIT_0
-#define PCNT_H_LIM 32767
+// PCNT configuration
+#define PCNT_UNIT PCNT_UNIT_0
+#define PCNT_H_LIM 32767  // Upper limit for PCNT counter
 
 void IRAM_ATTR StepperLimit();
-void initPCNT();
-void pollPcntPulseEvent();
-
 
 const static double stepsPerRevolution = stepsPerRev*microsteps;
 const static double ratio = filamentDiameter/leadScrewPitch; //gear ratio between spool and guide, set to 1 for direct drive
@@ -82,21 +80,19 @@ volatile int stepDirection = HIGH;
 unsigned long microsPrevStep = 0;
 
 double speed = 0.0; //m/s, current speed of the filament, calculated from encoder counts
-volatile double stepperSpeed = 0.0; // steps per second, for diagnostics
 
-//Testing new speed measurement
-volatile long encoderTicks = 0;
-volatile uint8_t lastAState = 0;
+// PCNT speed measurement variables
 int16_t prevPcntCount = 0;
-
-// timing variable
-unsigned long lastDiagnoseTime = 0;
-unsigned long lastEncoderPeriod = 0;
+unsigned long prevSpeedMeasureTime = 0;
+unsigned long lastEncoderPeriod = 0; // For speed decay fallback
 unsigned long encoderPrevTime = 0;
 volatile unsigned long limit_triggered = 0;
 bool interruptAttached = true; // Track interrupt attachment state
 volatile bool limitSwitchEvent = false;
 volatile bool encoderPulseEvent = false;
+
+// timing variable for diagnostics
+unsigned long lastDiagnoseTime = 0;
 
 // AS5600 magnetometer speed estimate (same shaft as roller)
 bool as5600Available = false;
@@ -111,16 +107,7 @@ const unsigned long MAGNETOMETER_PERIOD_MS = 20;
 const unsigned long POT_PERIOD_MS = 20;
 const unsigned long MOTOR_CTRL_PERIOD_MS = 10;
 const unsigned long DIAGNOSE_CALL_PERIOD_MS = 20;
-
-// Input encoder variables
-// Define rotary encoder pins
-//#define ENC_A 2
-//#define ENC_B 3
-//unsigned long _lastIncReadTime = micros(); 
-//unsigned long _lastDecReadTime = micros(); 
-//#define _pauseLength 25000
-//#define _fastIncrement 10
-//volatile int counter = 0;
+const unsigned long SPEED_MEASURE_PERIOD_MS = 10; // Period for PCNT speed measurement (10 ms for 100 Hz)
 
 
 void setup() {
@@ -145,12 +132,14 @@ void setup() {
     // Run calibration 
     //HomingAndCalibration(5000, 100); // Run calibration for 5 seconds per motor, sampling every 100 ms
 
-    //New speed mesurement test
+    //Speed measurement initialization
     delay(100); // Short delay to ensure everything is initialized before starting speed measurement
-    pcnt_get_counter_value(PCNT_UNIT_USED, &prevPcntCount);
-    encoderPrevTime = millis(); // Initialize encoder timestamp to current time
+    prevSpeedMeasureTime = millis(); // Initialize PCNT polling timestamp
+    encoderPrevTime = millis(); // Initialize speed period timestamp
     lastEncoderPeriod = 100; // Initialize to reasonable default period (~10 Hz)
     prevAs5600Time = millis();
+
+    pcnt_get_counter_value(PCNT_UNIT, &prevPcntCount);
 }
 
 void loop() {
@@ -162,11 +151,11 @@ void loop() {
     static unsigned long lastPotMs = 0;
     static unsigned long lastMotorCtrlMs = 0;
     static unsigned long lastDiagnoseCallMs = 0;
+    static unsigned long lastSpeedMeasureMs = 0;
 
     // Keep step generation in the fastest path for minimum timing jitter.
     stepperControl(microsCurrent, speed);
     //stepperControl(microsCurrent, 0.5); // Test with a constant speed command to verify stepper control independently of speed measurement
-    pollPcntPulseEvent();
 
     if (limitSwitchEvent) {
         noInterrupts();
@@ -184,16 +173,21 @@ void loop() {
         }
     }
 
+    if (currentMillis - lastMeasurementMs >= MEASUREMENT_PERIOD_MS) {
+        updateMeasurements(); // Update Current measurements
+        lastMeasurementMs = currentMillis;
+    }
+
+    if (currentMillis - lastSpeedMeasureMs >= SPEED_MEASURE_PERIOD_MS) {
+        pollPcntPulseEvent(); // Detect pulse arrival from hardware counter
+        lastSpeedMeasureMs = currentMillis;
+    }
+
     if (encoderPulseEvent) {
         noInterrupts();
         encoderPulseEvent = false;
         interrupts();
-        updateSpeedByPulse();
-    }
-
-    if (currentMillis - lastMeasurementMs >= MEASUREMENT_PERIOD_MS) {
-        updateMeasurements(); // Update Speed and Current measurements
-        lastMeasurementMs = currentMillis;
+        updateSpeedByPulse(); // Keep original pulse-period speed calculation
     }
 
     if (currentMillis - lastMagnetometerMs >= MAGNETOMETER_PERIOD_MS) {
@@ -221,6 +215,44 @@ void loop() {
     if (currentMillis - limit_triggered >= 500 && !interruptAttached){
         attachInterrupt(digitalPinToInterrupt(limitSwitchHighPin), StepperLimit, CHANGE);
         interruptAttached = true;
+    }
+}
+
+/// @brief Initialize PCNT (Pulse Counter) for accurate hardware-based encoder pulse counting
+void initPCNT() {
+    pcnt_config_t pcnt_config = {
+        .pulse_gpio_num = encoderPinA,     // Pulse input GPIO - Phase A
+        .ctrl_gpio_num = encoderPinB,      // Control GPIO - Phase B (for direction)
+        .lctrl_mode = PCNT_MODE_REVERSE,   // Phase B LOW = reverse
+        .hctrl_mode = PCNT_MODE_KEEP,      // Phase B HIGH = keep
+        .pos_mode = PCNT_COUNT_INC,        // Count on rising edge
+        .neg_mode = PCNT_COUNT_INC,        // Count on falling edge too (A CHANGE equivalent)
+        .counter_h_lim = PCNT_H_LIM,       // Upper limit
+        .counter_l_lim = -PCNT_H_LIM,      // Lower limit
+        .unit = PCNT_UNIT,
+        .channel = PCNT_CHANNEL_0,
+    };
+    
+    // Initialize PCNT unit
+    pcnt_unit_config(&pcnt_config);
+    
+    // Enable PCNT unit
+    pcnt_counter_pause(PCNT_UNIT);
+    pcnt_counter_clear(PCNT_UNIT);
+    pcnt_counter_resume(PCNT_UNIT);
+    
+    Serial.println("PCNT unit initialized with quadrature encoding");
+}
+
+/// @brief Poll PCNT and raise one pulse event when counter advances
+void pollPcntPulseEvent() {
+    int16_t pcntCount = 0;
+    pcnt_get_counter_value(PCNT_UNIT, &pcntCount);
+
+    int16_t countDelta = pcntCount - prevPcntCount;
+    if (countDelta != 0) {
+        encoderPulseEvent = true;
+        prevPcntCount = pcntCount;
     }
 }
 
@@ -349,7 +381,7 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
   // Same core math as your original code
   double spoolOmega = filamentSpeed / (spoolRadius + layerNumber * filamentDiameter);
   double guideOmega = spoolOmega * ratio;
-  stepperSpeed = guideOmega / (2.0 * PI) * stepsPerRevolution;
+  double stepperSpeed = guideOmega / (2.0 * PI) * stepsPerRevolution;
 
   if (stepperSpeed <= 0.0) return;
   double stepIntervalSeconds = 1.0 / stepperSpeed;
@@ -391,37 +423,6 @@ void IRAM_ATTR StepperLimit(){
     limitSwitchEvent = true;
 }
 
-void initPCNT() {
-    pcnt_config_t pcnt_config = {
-        .pulse_gpio_num = encoderPinA,
-        .ctrl_gpio_num = encoderPinB,
-        .lctrl_mode = PCNT_MODE_REVERSE,
-        .hctrl_mode = PCNT_MODE_KEEP,
-        .pos_mode = PCNT_COUNT_INC,
-        .neg_mode = PCNT_COUNT_INC,
-        .counter_h_lim = PCNT_H_LIM,
-        .counter_l_lim = -PCNT_H_LIM,
-        .unit = PCNT_UNIT_USED,
-        .channel = PCNT_CHANNEL_0,
-    };
-
-    pcnt_unit_config(&pcnt_config);
-    pcnt_counter_pause(PCNT_UNIT_USED);
-    pcnt_counter_clear(PCNT_UNIT_USED);
-    pcnt_counter_resume(PCNT_UNIT_USED);
-}
-
-void pollPcntPulseEvent() {
-    int16_t pcntCount = 0;
-    pcnt_get_counter_value(PCNT_UNIT_USED, &pcntCount);
-
-    int16_t countDelta = pcntCount - prevPcntCount;
-    if (countDelta != 0) {
-        encoderPulseEvent = true;
-        prevPcntCount = pcntCount;
-    }
-}
-
 /// @brief Initialize I2C peripherals (current sensors) and check for their presence. If a sensor is not found, print an error message and halt execution.
 void initI2CPeripherals() {
     Wire.begin();
@@ -459,17 +460,12 @@ void pinSetup() {
     pinMode(motorRollerPin, OUTPUT);
     pinMode(motorSpoolPin, OUTPUT);
 
-    pinMode (encoderPinA, INPUT_PULLUP);
-    pinMode (encoderPinB, INPUT_PULLUP);
+    pinMode(encoderPinA, INPUT_PULLUP);
+    pinMode(encoderPinB, INPUT_PULLUP);
+    // Note: No interrupt attachment for encoder - PCNT handles it in hardware
 
     pinMode(potPin, INPUT);
     pinMode(potCurrentPin, INPUT);
-    /*
-    pinMode(ENC_A, INPUT_PULLUP);
-    pinMode(ENC_B, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(ENC_A), read_encoder, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(ENC_B), read_encoder, CHANGE);
-    */
 }
 
 /// @brief Perform homing and no-load current calibration for the filament guide system.
@@ -529,16 +525,23 @@ void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
     }
 }
 
-/// @brief Interrupt service routine to count encoder pulses and calculate speed.
+/// @brief Update current measurements from INA219 sensors and apply a low-pass filter to smooth the readings.
+void updateMeasurements() {
+    float currentSpool = ina219_spool.getCurrent_mA();
+    SpoolMotorCurrent += CurrentfilterAlpha*(currentSpool - SpoolMotorCurrent); // Simple low-pass filter to smooth current measurement for spool motor
+    decaySpeed(); // Keep original no-pulse speed decay behavior
+}
+
+/// @brief Pulse-period speed estimation kept identical to original interrupt version.
 void updateSpeedByPulse() {
     unsigned long currentTime = millis();
     unsigned long period = currentTime - encoderPrevTime; // Time since last pulse in milliseconds
-    if (period == 0) return; // Avoid division by zero, should not happen with proper timing
-    // With CHANGE interrupt on channel A, we get 2 edges per encoder pulse.
-    float revPerSec = 1000.0f / ((float)period * encoderResolution * encoderEdgesPerPulse); // revolutions per second
-    float rawSpeed = revPerSec * (2.0f * PI * rollerRadius); // Calculate speed in m/s based on roller radius
-    speed += SpeedFilterAlpha * (rawSpeed - speed); // Apply low-pass filter to smooth speed measurement
-    
+    if (period == 0) return;
+
+    float revPerSec = 1000.0f / ((float)period * encoderResolution * encoderEdgesPerPulse);
+    float rawSpeed = revPerSec * (2.0f * PI * rollerRadius);
+    speed += SpeedFilterAlpha * (rawSpeed - speed);
+
     lastEncoderPeriod = period;
     encoderPrevTime = currentTime;
 }
@@ -547,20 +550,11 @@ void decaySpeed() {
     unsigned long currentTime = millis();
     unsigned long gap_period = currentTime - encoderPrevTime; // Time since last pulse in milliseconds
 
-    if (gap_period > lastEncoderPeriod){ // Wait for a full period to elapse before decaying speed, ensures we only decay after missing a pulse
-    float revPerSec = 1000.0 / ((float)gap_period * encoderResolution * encoderEdgesPerPulse); // Match encoder edge counting in ISR
-    float rawSpeed = revPerSec * (2.0 * PI * rollerRadius); // Calculate raw speed in m/s based on roller radius
-    speed += SpeedFilterAlpha * (rawSpeed - speed); // Apply low-pass filter to smooth speed measurement
+    if (gap_period > lastEncoderPeriod) {
+        float revPerSec = 1000.0f / ((float)gap_period * encoderResolution * encoderEdgesPerPulse);
+        float rawSpeed = revPerSec * (2.0f * PI * rollerRadius);
+        speed += SpeedFilterAlpha * (rawSpeed - speed);
     }
-}
-
-/// @brief Update current measurements from INA219 sensors and apply a low-pass filter to smooth the readings.
-void updateMeasurements() {
-    float currentSpool = ina219_spool.getCurrent_mA();
-    SpoolMotorCurrent += CurrentfilterAlpha*(currentSpool - SpoolMotorCurrent); // Simple low-pass filter to smooth current measurement for spool motor
-    //updateSpeedEstimate();
-    //TEST this:
-    decaySpeed(); // Decay speed estimate if no pulses received, should be called regularly in loop
 }
 
 void potSpeedControl() {
@@ -573,50 +567,3 @@ void potCurrentControl() {
     float potValue = analogRead(potCurrentPin); // Read potentiometer value (0-4095 for ESP32 12-bit ADC)
     SetTorqueCurrent = ((ADC_maxValue - potValue) / ADC_maxValue) * 200.0; // Inverted map: max pot -> min current
 }
-
-// Encoder pulse events are sourced from PCNT polling in pollPcntPulseEvent().
-
-/* Based on Oleg Mazurov's code for rotary encoder interrupt service routines for AVR micros
-   here https://chome.nerpa.tech/mcu/reading-rotary-encoder-on-arduino/
-   and using interrupts https://chome.nerpa.tech/mcu/rotary-encoder-interrupt-service-routine-for-avr-micros/
-
-   This example does not use the port read method. Tested with Nano and ESP32
-   both encoder A and B pins must be connected to interrupt enabled pins, see here for more info:
-   https://www.arduino.cc/reference/en/language/functions/external-interrupts/attachinterrupt/
-
-void read_encoder() {
-  // Encoder interrupt routine for both pins. Updates counter
-  // if they are valid and have rotated a full indent
- 
-  static uint8_t old_AB = 3;  // Lookup table index
-  static int8_t encval = 0;   // Encoder value  
-  static const int8_t enc_states[]  = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0}; // Lookup table
-
-  old_AB <<=2;  // Remember previous state
-
-  if (digitalRead(ENC_A)) old_AB |= 0x02; // Add current state of pin A
-  if (digitalRead(ENC_B)) old_AB |= 0x01; // Add current state of pin B
-  
-  encval += enc_states[( old_AB & 0x0f )];
-
-  // Update counter if encoder has rotated a full indent, that is at least 4 steps
-  if( encval > 3 ) {        // Four steps forward
-    int changevalue = 1;
-    if((micros() - _lastIncReadTime) < _pauseLength) {
-      changevalue = _fastIncrement * changevalue; 
-    }
-    _lastIncReadTime = micros();
-    counter = counter + changevalue;              // Update counter
-    encval = 0;
-  }
-  else if( encval < -3 ) {        // Four steps backward
-    int changevalue = -1;
-    if((micros() - _lastDecReadTime) < _pauseLength) {
-      changevalue = _fastIncrement * changevalue; 
-    }
-    _lastDecReadTime = micros();
-    counter = counter + changevalue;              // Update counter
-    encval = 0;
-  }
-} 
-  */
