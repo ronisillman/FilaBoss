@@ -459,8 +459,8 @@ void pinSetup() {
     pinMode(motorRollerPin, OUTPUT);
     pinMode(motorSpoolPin, OUTPUT);
 
-    pinMode (encoderPinA, INPUT_PULLUP);
-    pinMode (encoderPinB, INPUT_PULLUP);
+    pinMode (encoderPinA, INPUT);
+    pinMode (encoderPinB, INPUT);
 
     pinMode(potPin, INPUT);
     pinMode(potCurrentPin, INPUT);

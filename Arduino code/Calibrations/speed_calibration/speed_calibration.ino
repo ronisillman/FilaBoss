@@ -161,8 +161,8 @@ void setup() {
     Serial.begin(115200);
     delay(300);
 
-    pinMode(encoderPinA, INPUT_PULLUP);
-    pinMode(encoderPinB, INPUT_PULLUP);
+    pinMode(encoderPinA, INPUT);
+    pinMode(encoderPinB, INPUT);
     pinMode(motorPulleyPin, OUTPUT);
 
     initPCNT();
