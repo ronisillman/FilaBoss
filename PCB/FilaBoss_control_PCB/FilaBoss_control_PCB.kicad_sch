@@ -168,6 +168,210 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "Connector:Conn_01x03_Pin"
+			(pin_names
+				(offset 1.016)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "J"
+				(at 0 5.08 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "Conn_01x03_Pin"
+				(at 0 -5.08 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" "~"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "Generic connector, single row, 01x03, script generated"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_locked" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "connector"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_fp_filters" "Connector*:*_1x??_*"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "Conn_01x03_Pin_1_1"
+				(rectangle
+					(start 0.8636 2.667)
+					(end 0 2.413)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type outline)
+					)
+				)
+				(rectangle
+					(start 0.8636 0.127)
+					(end 0 -0.127)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type outline)
+					)
+				)
+				(rectangle
+					(start 0.8636 -2.413)
+					(end 0 -2.667)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type outline)
+					)
+				)
+				(polyline
+					(pts
+						(xy 1.27 2.54) (xy 0.8636 2.54)
+					)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 1.27 0) (xy 0.8636 0)
+					)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 1.27 -2.54) (xy 0.8636 -2.54)
+					)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(pin passive line
+					(at 5.08 2.54 180)
+					(length 3.81)
+					(name "Pin_1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 5.08 0 180)
+					(length 3.81)
+					(name "Pin_2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 5.08 -2.54 180)
+					(length 3.81)
+					(name "Pin_3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "Connector:Screw_Terminal_01x02"
 			(pin_names
 				(offset 1.016)
@@ -2754,374 +2958,6 @@
 						)
 					)
 					(number "4"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-			)
-			(embedded_fonts no)
-		)
-		(symbol "PCM_SparkFun-Connector:Conn_01x02_JST_P2.0mm_Horizontal_SMD"
-			(pin_numbers
-				(hide yes)
-			)
-			(pin_names
-				(offset 1.016)
-				(hide yes)
-			)
-			(exclude_from_sim no)
-			(in_bom yes)
-			(on_board yes)
-			(property "Reference" "J"
-				(at 0 5.08 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Value" "JST_2mm_LiPo"
-				(at 0 -8.89 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Footprint" "PCM_SparkFun-Connector:JST_1x02_P2.0mm_Horizontal_SMD"
-				(at 0 -11.43 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Datasheet" "~"
-				(at 0 -13.97 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Description" "2 Pin 2mm JST Connector"
-				(at 0 -19.05 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "PROD_ID" "CONN-11443"
-				(at 0 -16.51 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "ki_keywords" "SparkFun connector"
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "ki_fp_filters" "Connector*:*_1x??_*"
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(symbol "Conn_01x02_JST_P2.0mm_Horizontal_SMD_1_1"
-				(polyline
-					(pts
-						(xy -1.27 1.27) (xy -3.81 1.27) (xy -3.81 2.54) (xy 3.81 2.54) (xy 3.81 -5.08) (xy -3.81 -5.08)
-						(xy -3.81 -3.81) (xy -1.27 -3.81) (xy -1.27 1.27)
-					)
-					(stroke
-						(width 0.254)
-						(type default)
-					)
-					(fill
-						(type background)
-					)
-				)
-				(rectangle
-					(start 0.635 2.54)
-					(end 1.905 1.905)
-					(stroke
-						(width 0.254)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(rectangle
-					(start 0.635 -4.445)
-					(end 1.905 -5.08)
-					(stroke
-						(width 0.254)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(pin passive line
-					(at -5.08 0 0)
-					(length 3.81)
-					(name "+"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin passive line
-					(at -5.08 -2.54 0)
-					(length 3.81)
-					(name "-"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin no_connect line
-					(at 1.27 1.27 0)
-					(length 2.54)
-					(hide yes)
-					(name "NC2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "NC2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin no_connect line
-					(at 1.27 -3.81 0)
-					(length 2.54)
-					(hide yes)
-					(name "NC1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "NC1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-			)
-			(embedded_fonts no)
-		)
-		(symbol "PCM_SparkFun-Connector:Conn_01x03_JST_P2.0mm_Vertical_PTH"
-			(pin_numbers
-				(hide yes)
-			)
-			(pin_names
-				(offset 1.016)
-				(hide yes)
-			)
-			(exclude_from_sim no)
-			(in_bom yes)
-			(on_board yes)
-			(property "Reference" "J"
-				(at 0 6.096 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Value" "JST_2mm_3"
-				(at 0 -6.35 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-				)
-			)
-			(property "Footprint" "PCM_SparkFun-Connector:JST_1x03_P2.0mm_Vertical_PTH"
-				(at 0 -8.89 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Datasheet" "https://www.sparkfun.com/datasheets/Prototyping/ePH.pdf"
-				(at 0 -11.43 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "Description" "3 Pin 2mm JST Connector"
-				(at 0 -16.51 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "PROD_ID" "CONN-..."
-				(at 0 -13.97 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "ki_keywords" "SparkFun connector"
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(property "ki_fp_filters" "Connector*:*_1x??_*"
-				(at 0 0 0)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(hide yes)
-				)
-			)
-			(symbol "Conn_01x03_JST_P2.0mm_Vertical_PTH_1_1"
-				(polyline
-					(pts
-						(xy -1.27 3.81) (xy -3.81 3.81) (xy -3.81 5.08) (xy 3.81 5.08) (xy 3.81 -5.08) (xy -3.81 -5.08)
-						(xy -3.81 -3.81) (xy -1.27 -3.81) (xy -1.27 3.81)
-					)
-					(stroke
-						(width 0.254)
-						(type default)
-					)
-					(fill
-						(type background)
-					)
-				)
-				(rectangle
-					(start 0.635 5.08)
-					(end 1.905 4.445)
-					(stroke
-						(width 0.254)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(rectangle
-					(start 0.635 -4.445)
-					(end 1.905 -5.08)
-					(stroke
-						(width 0.254)
-						(type default)
-					)
-					(fill
-						(type none)
-					)
-				)
-				(pin passive line
-					(at -5.08 2.54 0)
-					(length 3.81)
-					(name "1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "1"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin passive line
-					(at -5.08 0 0)
-					(length 3.81)
-					(name "2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "2"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-				)
-				(pin passive line
-					(at -5.08 -2.54 0)
-					(length 3.81)
-					(name "3"
-						(effects
-							(font
-								(size 1.27 1.27)
-							)
-						)
-					)
-					(number "3"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -6061,6 +5897,12 @@
 		(uuid "ed63f1b0-9aa1-4cba-a50a-a76bcfe9cd2f")
 	)
 	(junction
+		(at 128.27 101.6)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "ed7201f4-0815-4cfb-9332-d008b38b2cce")
+	)
+	(junction
 		(at 132.08 110.49)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -6094,7 +5936,7 @@
 	)
 	(wire
 		(pts
-			(xy 262.89 76.2) (xy 255.27 76.2)
+			(xy 260.35 76.2) (xy 255.27 76.2)
 		)
 		(stroke
 			(width 0)
@@ -6294,7 +6136,7 @@
 	)
 	(wire
 		(pts
-			(xy 262.89 66.04) (xy 255.27 66.04)
+			(xy 260.35 66.04) (xy 255.27 66.04)
 		)
 		(stroke
 			(width 0)
@@ -6544,7 +6386,7 @@
 	)
 	(wire
 		(pts
-			(xy 123.19 101.6) (xy 133.35 101.6)
+			(xy 113.03 101.6) (xy 128.27 101.6)
 		)
 		(stroke
 			(width 0)
@@ -6611,6 +6453,16 @@
 			(type default)
 		)
 		(uuid "64e7e21a-2140-43e0-8777-1a6510cd3a4e")
+	)
+	(wire
+		(pts
+			(xy 130.81 85.09) (xy 130.81 99.06)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6576a6c5-43e5-4138-b5bf-f39586b65a21")
 	)
 	(wire
 		(pts
@@ -6691,6 +6543,16 @@
 			(type default)
 		)
 		(uuid "78559ae4-fab5-4357-9e5b-8077057d84f8")
+	)
+	(wire
+		(pts
+			(xy 128.27 85.09) (xy 130.81 85.09)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7987db7d-3804-408c-9c09-2b62e2f306cd")
 	)
 	(wire
 		(pts
@@ -6874,6 +6736,16 @@
 	)
 	(wire
 		(pts
+			(xy 128.27 101.6) (xy 133.35 101.6)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9a84c1cd-a71b-4433-936d-bd49a9cb4096")
+	)
+	(wire
+		(pts
 			(xy 234.95 106.68) (xy 240.03 106.68)
 		)
 		(stroke
@@ -6904,7 +6776,7 @@
 	)
 	(wire
 		(pts
-			(xy 262.89 69.85) (xy 262.89 66.04)
+			(xy 260.35 69.85) (xy 260.35 66.04)
 		)
 		(stroke
 			(width 0)
@@ -7034,7 +6906,7 @@
 	)
 	(wire
 		(pts
-			(xy 154.94 167.64) (xy 154.94 116.84)
+			(xy 156.21 167.64) (xy 156.21 116.84)
 		)
 		(stroke
 			(width 0)
@@ -7101,6 +6973,16 @@
 			(type default)
 		)
 		(uuid "b7f0cc03-7ca9-4cfd-ba95-ea9487dbbef9")
+	)
+	(wire
+		(pts
+			(xy 128.27 90.17) (xy 128.27 101.6)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "b9339141-f242-45fc-bf7a-246b2345ede7")
 	)
 	(wire
 		(pts
@@ -7234,7 +7116,7 @@
 	)
 	(wire
 		(pts
-			(xy 262.89 72.39) (xy 262.89 76.2)
+			(xy 260.35 72.39) (xy 260.35 76.2)
 		)
 		(stroke
 			(width 0)
@@ -7374,7 +7256,7 @@
 	)
 	(wire
 		(pts
-			(xy 152.4 167.64) (xy 154.94 167.64)
+			(xy 152.4 167.64) (xy 156.21 167.64)
 		)
 		(stroke
 			(width 0)
@@ -7424,7 +7306,7 @@
 	)
 	(wire
 		(pts
-			(xy 123.19 99.06) (xy 130.81 99.06)
+			(xy 113.03 99.06) (xy 130.81 99.06)
 		)
 		(stroke
 			(width 0)
@@ -7484,7 +7366,7 @@
 	)
 	(wire
 		(pts
-			(xy 154.94 116.84) (xy 160.02 116.84)
+			(xy 156.21 116.84) (xy 160.02 116.84)
 		)
 		(stroke
 			(width 0)
@@ -7865,8 +7747,8 @@
 		)
 	)
 	(symbol
-		(lib_id "PCM_SparkFun-Connector:Conn_01x02_JST_P2.0mm_Horizontal_SMD")
-		(at 71.12 81.28 180)
+		(lib_id "Connector:Conn_01x02_Pin")
+		(at 71.12 78.74 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -7874,7 +7756,7 @@
 		(dnp no)
 		(uuid "0fbebe19-639b-4e79-bf41-9f32c6a9f832")
 		(property "Reference" "J17"
-			(at 64.77 80.01 0)
+			(at 67.31 80.01 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7882,7 +7764,7 @@
 			)
 		)
 		(property "Value" "manual"
-			(at 71.12 74.93 0)
+			(at 71.12 76.2 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7890,7 +7772,7 @@
 			)
 		)
 		(property "Footprint" "Connector_JST:JST_XA_B02B-XASK-1_1x02_P2.50mm_Vertical"
-			(at 71.12 69.85 0)
+			(at 71.12 90.17 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7899,7 +7781,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 71.12 67.31 0)
+			(at 71.12 78.74 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7907,8 +7789,8 @@
 				(hide yes)
 			)
 		)
-		(property "Description" "2 Pin 2mm JST Connector"
-			(at 71.12 62.23 0)
+		(property "Description" "Generic connector, single row, 01x02, script generated"
+			(at 71.12 78.74 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7917,7 +7799,7 @@
 			)
 		)
 		(property "PROD_ID" "CONN-11443"
-			(at 71.12 64.77 0)
+			(at 71.12 95.25 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7930,12 +7812,6 @@
 		)
 		(pin "1"
 			(uuid "904a25c7-c083-4d28-9f32-5ec8d4c804ae")
-		)
-		(pin "NC2"
-			(uuid "8fb8c20d-6de7-434b-97a7-f37cb760b35a")
-		)
-		(pin "NC1"
-			(uuid "ba2a14ca-ef5f-46a9-a0d2-c14c1946be0b")
 		)
 		(instances
 			(project "FilaBoss_control_PCB"
@@ -8711,7 +8587,6 @@
 		(in_bom yes)
 		(on_board no)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "33807f19-ff1e-445b-8cb9-7b05c24ea9c0")
 		(property "Reference" "#PWR035"
 			(at 223.52 127 0)
@@ -8723,7 +8598,7 @@
 			)
 		)
 		(property "Value" "+24V"
-			(at 223.52 118.11 0)
+			(at 226.06 121.92 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9119,8 +8994,8 @@
 				)
 			)
 		)
-		(property "Value" "Screw_Terminal_01x02_P5mm"
-			(at 26.67 29.21 0)
+		(property "Value" "Power"
+			(at 19.05 22.86 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9648,10 +9523,9 @@
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "53093cee-c7bf-4eda-958f-d7c6b2f8166f")
 		(property "Reference" "A1"
-			(at 225.6633 120.65 0)
+			(at 218.44 142.24 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9660,7 +9534,7 @@
 			)
 		)
 		(property "Value" "Pololu_Breakout_A4988"
-			(at 225.6633 123.19 0)
+			(at 229.87 130.81 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9821,7 +9695,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 123.19 96.52 90)
+		(at 113.03 96.52 90)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -9829,7 +9703,7 @@
 		(dnp no)
 		(uuid "53b5038c-07d3-4f64-9922-d802314d45de")
 		(property "Reference" "#PWR030"
-			(at 129.54 96.52 0)
+			(at 119.38 96.52 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9838,7 +9712,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 125.73 100.33 0)
+			(at 119.38 96.52 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9846,7 +9720,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 123.19 96.52 0)
+			(at 113.03 96.52 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9855,7 +9729,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 123.19 96.52 0)
+			(at 113.03 96.52 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9864,7 +9738,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 123.19 96.52 0)
+			(at 113.03 96.52 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10241,9 +10115,9 @@
 		)
 	)
 	(symbol
-		(lib_id "PCM_SparkFun-Connector:Conn_01x02_JST_P2.0mm_Horizontal_SMD")
-		(at 267.97 72.39 0)
-		(mirror x)
+		(lib_id "Connector:Conn_01x02_Pin")
+		(at 265.43 69.85 0)
+		(mirror y)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -10251,7 +10125,7 @@
 		(dnp no)
 		(uuid "5ea156cd-ab96-4d60-8b46-335b8ccf192b")
 		(property "Reference" "J9"
-			(at 267.97 66.04 0)
+			(at 262.89 73.66 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10259,7 +10133,7 @@
 			)
 		)
 		(property "Value" "Extruder"
-			(at 267.97 63.5 0)
+			(at 270.51 71.12 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10267,7 +10141,7 @@
 			)
 		)
 		(property "Footprint" "Connector_JST:JST_XA_B02B-XASK-1_1x02_P2.50mm_Vertical"
-			(at 267.97 60.96 0)
+			(at 265.43 81.28 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10276,7 +10150,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 267.97 58.42 0)
+			(at 265.43 69.85 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10284,8 +10158,8 @@
 				(hide yes)
 			)
 		)
-		(property "Description" "2 Pin 2mm JST Connector"
-			(at 267.97 53.34 0)
+		(property "Description" "Generic connector, single row, 01x02, script generated"
+			(at 265.43 69.85 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10294,7 +10168,7 @@
 			)
 		)
 		(property "PROD_ID" "CONN-11443"
-			(at 267.97 55.88 0)
+			(at 265.43 86.36 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10307,12 +10181,6 @@
 		)
 		(pin "1"
 			(uuid "d2dfe3bf-eb46-4794-ad64-d693a7db28f6")
-		)
-		(pin "NC2"
-			(uuid "894c13ee-6d4b-41dc-9355-023e9b60692c")
-		)
-		(pin "NC1"
-			(uuid "7a1ee3cd-84e4-4d07-9771-353b6f918a1d")
 		)
 		(instances
 			(project "FilaBoss_control_PCB"
@@ -10476,9 +10344,9 @@
 		)
 	)
 	(symbol
-		(lib_id "PCM_SparkFun-Connector:Conn_01x02_JST_P2.0mm_Horizontal_SMD")
-		(at 30.48 129.54 0)
-		(mirror y)
+		(lib_id "Connector:Conn_01x02_Pin")
+		(at 30.48 132.08 0)
+		(mirror x)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -10486,7 +10354,7 @@
 		(dnp no)
 		(uuid "6617e01e-cf20-4d42-8906-c36019631f68")
 		(property "Reference" "J2"
-			(at 30.48 124.46 0)
+			(at 30.48 137.16 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10494,7 +10362,7 @@
 			)
 		)
 		(property "Value" "SPOOL"
-			(at 30.48 135.89 0)
+			(at 30.48 125.73 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10502,7 +10370,7 @@
 			)
 		)
 		(property "Footprint" "Connector_JST:JST_XA_B02B-XASK-1_1x02_P2.50mm_Vertical"
-			(at 30.48 140.97 0)
+			(at 30.48 120.65 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10511,7 +10379,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 30.48 143.51 0)
+			(at 30.48 132.08 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10519,8 +10387,8 @@
 				(hide yes)
 			)
 		)
-		(property "Description" "2 Pin 2mm JST Connector"
-			(at 30.48 148.59 0)
+		(property "Description" "Generic connector, single row, 01x02, script generated"
+			(at 30.48 132.08 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10529,7 +10397,7 @@
 			)
 		)
 		(property "PROD_ID" "CONN-11443"
-			(at 30.48 146.05 0)
+			(at 30.48 115.57 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10542,12 +10410,6 @@
 		)
 		(pin "1"
 			(uuid "2dd4f2c3-f0a1-4fff-8754-42fb99f848aa")
-		)
-		(pin "NC2"
-			(uuid "6a9797ff-38ba-4e42-a85f-a92a96d851c6")
-		)
-		(pin "NC1"
-			(uuid "054ac2bd-f2a6-4170-ae7f-f2eedf0fb8d9")
 		)
 		(instances
 			(project "FilaBoss_control_PCB"
@@ -10629,7 +10491,7 @@
 	)
 	(symbol
 		(lib_id "power:+3.3V")
-		(at 185.42 29.21 180)
+		(at 187.96 29.21 180)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -10637,7 +10499,7 @@
 		(dnp no)
 		(uuid "665c671d-7528-421d-86c3-449e9fac5d97")
 		(property "Reference" "#PWR027"
-			(at 185.42 25.4 0)
+			(at 187.96 25.4 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10646,7 +10508,7 @@
 			)
 		)
 		(property "Value" "+3.3V"
-			(at 181.61 30.48 0)
+			(at 190.5 29.21 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10654,7 +10516,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 185.42 29.21 0)
+			(at 187.96 29.21 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10663,7 +10525,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 185.42 29.21 0)
+			(at 187.96 29.21 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10672,7 +10534,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"+3.3V\""
-			(at 185.42 29.21 0)
+			(at 187.96 29.21 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10986,7 +10848,7 @@
 			)
 		)
 		(property "Value" "+3.3V"
-			(at 217.17 119.38 0)
+			(at 214.63 121.92 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11033,6 +10895,77 @@
 		)
 	)
 	(symbol
+		(lib_id "Switch:SW_SPDT")
+		(at 123.19 87.63 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board no)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "7618752f-00ee-4c46-9854-c08dd9b1a1c1")
+		(property "Reference" "SW3"
+			(at 123.19 78.74 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "Limit_SW"
+			(at 123.19 81.28 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 123.19 87.63 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 123.19 95.25 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Switch, single pole double throw"
+			(at 123.19 87.63 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "a890d773-6811-4508-b1ec-93c57ed70cc7")
+		)
+		(pin "3"
+			(uuid "009985ca-4648-4ae3-8970-1108074ae3d9")
+		)
+		(pin "2"
+			(uuid "91108921-b979-4dde-801b-10e663d8d477")
+		)
+		(instances
+			(project "FilaBoss_control_PCB"
+				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
+					(reference "SW3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "power:GND")
 		(at 160.02 142.24 0)
 		(unit 1)
@@ -11051,7 +10984,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 156.21 143.51 0)
+			(at 160.02 147.32 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11888,7 +11821,7 @@
 			)
 		)
 		(property "Value" "+5V"
-			(at 158.75 132.08 90)
+			(at 157.48 133.35 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12085,8 +12018,8 @@
 		)
 	)
 	(symbol
-		(lib_id "PCM_SparkFun-Connector:Conn_01x02_JST_P2.0mm_Horizontal_SMD")
-		(at 71.12 102.87 180)
+		(lib_id "Connector:Conn_01x02_Pin")
+		(at 71.12 100.33 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -12094,7 +12027,7 @@
 		(dnp no)
 		(uuid "9d68543b-4080-4904-98c6-7fbf87aaecb3")
 		(property "Reference" "J16"
-			(at 71.12 107.95 0)
+			(at 71.12 95.25 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12102,7 +12035,7 @@
 			)
 		)
 		(property "Value" "Load"
-			(at 71.12 96.52 0)
+			(at 71.12 106.68 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12110,7 +12043,7 @@
 			)
 		)
 		(property "Footprint" "Connector_JST:JST_XA_B02B-XASK-1_1x02_P2.50mm_Vertical"
-			(at 71.12 91.44 0)
+			(at 71.12 111.76 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12119,7 +12052,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 71.12 88.9 0)
+			(at 71.12 100.33 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12127,8 +12060,8 @@
 				(hide yes)
 			)
 		)
-		(property "Description" "2 Pin 2mm JST Connector"
-			(at 71.12 83.82 0)
+		(property "Description" "Generic connector, single row, 01x02, script generated"
+			(at 71.12 100.33 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12137,7 +12070,7 @@
 			)
 		)
 		(property "PROD_ID" "CONN-11443"
-			(at 71.12 86.36 0)
+			(at 71.12 116.84 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12150,12 +12083,6 @@
 		)
 		(pin "1"
 			(uuid "36d0b45d-24fe-49ed-8c7c-17b14a83472e")
-		)
-		(pin "NC2"
-			(uuid "f06a2ed6-73bd-48ff-a81b-7fa150cb246a")
-		)
-		(pin "NC1"
-			(uuid "4911398c-c67a-4257-bdd7-1d84e5483c30")
 		)
 		(instances
 			(project "FilaBoss_control_PCB"
@@ -12427,8 +12354,9 @@
 		)
 	)
 	(symbol
-		(lib_id "PCM_SparkFun-Connector:Conn_01x03_JST_P2.0mm_Vertical_PTH")
-		(at 118.11 99.06 180)
+		(lib_id "Connector:Conn_01x03_Pin")
+		(at 107.95 99.06 0)
+		(mirror x)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -12436,7 +12364,7 @@
 		(dnp no)
 		(uuid "a4619360-35b7-47a3-8dd2-a66542c643bc")
 		(property "Reference" "J8"
-			(at 113.03 100.3301 0)
+			(at 104.14 99.06 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12445,7 +12373,7 @@
 			)
 		)
 		(property "Value" "limit switch"
-			(at 109.22 92.71 90)
+			(at 96.52 96.52 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12454,7 +12382,7 @@
 			)
 		)
 		(property "Footprint" "Connector_JST:JST_XA_B03B-XASK-1_1x03_P2.50mm_Vertical"
-			(at 118.11 90.17 0)
+			(at 107.95 90.17 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12462,8 +12390,8 @@
 				(hide yes)
 			)
 		)
-		(property "Datasheet" "https://www.sparkfun.com/datasheets/Prototyping/ePH.pdf"
-			(at 118.11 87.63 0)
+		(property "Datasheet" "~"
+			(at 107.95 99.06 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12471,8 +12399,8 @@
 				(hide yes)
 			)
 		)
-		(property "Description" "3 Pin 2mm JST Connector"
-			(at 118.11 82.55 0)
+		(property "Description" "Generic connector, single row, 01x03, script generated"
+			(at 107.95 99.06 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12481,7 +12409,7 @@
 			)
 		)
 		(property "SparkFun" "PRT-09916"
-			(at 118.11 81.788 0)
+			(at 107.95 81.788 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12490,7 +12418,7 @@
 			)
 		)
 		(property "PROD_ID" "CONN-..."
-			(at 118.11 85.09 0)
+			(at 107.95 85.09 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13063,7 +12991,7 @@
 	)
 	(symbol
 		(lib_id "power:GND")
-		(at 187.96 29.21 0)
+		(at 185.42 29.21 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -13071,7 +12999,7 @@
 		(dnp no)
 		(uuid "b99f8c0b-9bb7-47fc-aef4-766ba3ddce6f")
 		(property "Reference" "#PWR020"
-			(at 187.96 35.56 0)
+			(at 185.42 35.56 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13080,7 +13008,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 187.96 34.29 0)
+			(at 185.42 34.29 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13088,7 +13016,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 187.96 29.21 0)
+			(at 185.42 29.21 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13097,7 +13025,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 187.96 29.21 0)
+			(at 185.42 29.21 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13106,7 +13034,7 @@
 			)
 		)
 		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
-			(at 187.96 29.21 0)
+			(at 185.42 29.21 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13403,7 +13331,6 @@
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "c81d016b-d845-470d-b6a4-839f50457bdc")
 		(property "Reference" "#PWR08"
 			(at 153.67 121.92 0)
@@ -13415,7 +13342,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 156.21 121.9199 90)
+			(at 157.48 127 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14167,9 +14094,9 @@
 		)
 	)
 	(symbol
-		(lib_id "PCM_SparkFun-Connector:Conn_01x02_JST_P2.0mm_Horizontal_SMD")
-		(at 248.92 44.45 0)
-		(mirror x)
+		(lib_id "Connector:Conn_01x02_Pin")
+		(at 248.92 41.91 0)
+		(mirror y)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -14177,7 +14104,7 @@
 		(dnp no)
 		(uuid "e48e9fb7-e1fc-473c-bcbc-c48dc7b1c648")
 		(property "Reference" "J11"
-			(at 248.92 38.1 0)
+			(at 248.92 48.26 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14185,7 +14112,7 @@
 			)
 		)
 		(property "Value" "SDA/SCL"
-			(at 248.92 35.56 0)
+			(at 248.92 50.8 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14193,7 +14120,7 @@
 			)
 		)
 		(property "Footprint" "Connector_JST:JST_XA_B02B-XASK-1_1x02_P2.50mm_Vertical"
-			(at 248.92 33.02 0)
+			(at 248.92 53.34 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14202,7 +14129,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 248.92 30.48 0)
+			(at 248.92 41.91 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14210,8 +14137,8 @@
 				(hide yes)
 			)
 		)
-		(property "Description" "2 Pin 2mm JST Connector"
-			(at 248.92 25.4 0)
+		(property "Description" "Generic connector, single row, 01x02, script generated"
+			(at 248.92 41.91 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14220,7 +14147,7 @@
 			)
 		)
 		(property "PROD_ID" "CONN-11443"
-			(at 248.92 27.94 0)
+			(at 248.92 58.42 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14234,16 +14161,75 @@
 		(pin "1"
 			(uuid "f847e42a-876f-47fe-a028-4ccf2915ff2e")
 		)
-		(pin "NC2"
-			(uuid "1318e43d-e111-40ac-9b34-daea6d47d5ab")
-		)
-		(pin "NC1"
-			(uuid "300a8bb9-92e8-46be-9d20-68db1d8b9762")
-		)
 		(instances
 			(project "FilaBoss_control_PCB"
 				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
 					(reference "J11")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 118.11 87.63 270)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "e53873c2-94dc-4e71-bd07-48377c2dbe6c")
+		(property "Reference" "#PWR050"
+			(at 111.76 87.63 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 111.76 87.63 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 118.11 87.63 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 118.11 87.63 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 118.11 87.63 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "794de085-aab2-4254-b91e-ef48a4e89beb")
+		)
+		(instances
+			(project "FilaBoss_control_PCB"
+				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
+					(reference "#PWR050")
 					(unit 1)
 				)
 			)
@@ -14659,9 +14645,9 @@
 		)
 	)
 	(symbol
-		(lib_id "PCM_SparkFun-Connector:Conn_01x02_JST_P2.0mm_Horizontal_SMD")
-		(at 30.48 149.86 0)
-		(mirror y)
+		(lib_id "Connector:Conn_01x02_Pin")
+		(at 30.48 152.4 0)
+		(mirror x)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -14669,7 +14655,7 @@
 		(dnp no)
 		(uuid "f3098daa-a9ef-48a2-9f46-b701c6dfa336")
 		(property "Reference" "J3"
-			(at 30.48 144.78 0)
+			(at 30.48 157.48 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14677,7 +14663,7 @@
 			)
 		)
 		(property "Value" "PULLER"
-			(at 30.48 156.21 0)
+			(at 30.48 146.05 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14685,7 +14671,7 @@
 			)
 		)
 		(property "Footprint" "Connector_JST:JST_XA_B02B-XASK-1_1x02_P2.50mm_Vertical"
-			(at 30.48 161.29 0)
+			(at 30.48 140.97 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14694,7 +14680,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 30.48 163.83 0)
+			(at 30.48 152.4 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14702,8 +14688,8 @@
 				(hide yes)
 			)
 		)
-		(property "Description" "2 Pin 2mm JST Connector"
-			(at 30.48 168.91 0)
+		(property "Description" "Generic connector, single row, 01x02, script generated"
+			(at 30.48 152.4 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14712,7 +14698,7 @@
 			)
 		)
 		(property "PROD_ID" "CONN-11443"
-			(at 30.48 166.37 0)
+			(at 30.48 135.89 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14725,12 +14711,6 @@
 		)
 		(pin "1"
 			(uuid "6a96ff2b-25d8-45c5-8347-cd23fd562adc")
-		)
-		(pin "NC2"
-			(uuid "487ff585-9d1e-4974-9ff0-37a798d2e2b6")
-		)
-		(pin "NC1"
-			(uuid "e219c8b0-571b-41fe-8f5f-d195aad78edc")
 		)
 		(instances
 			(project "FilaBoss_control_PCB"
