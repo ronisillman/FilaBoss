@@ -22,7 +22,7 @@ PID RollerPID(5000, 1500, 5.0); // for 12v dc motor
 const static float ADC_maxValue = pow(2, ADC_bits) - 1; // 4095 for 12-bit ADC
 const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 
-// ESP32 pin setup (ESP-WROOM-32 + CP2102 dev board)
+/* // ESP32 pin setup (ESP-WROOM-32 + CP2102 dev board)
 #define motorRollerPin 18
 #define motorSpoolPin 19
 #define stepPin 25
@@ -32,7 +32,24 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 #define encoderPinA 4             // CLK pin (PCNT-capable)
 #define encoderPinB 5             // DT pin (PCNT-capable)
 #define potPin 34                 // ADC1 input
-#define potCurrentPin 35          // ADC1 input
+#define potCurrentPin 35          // ADC1 input */
+
+// ESP32 pin setup (ESP-WROOM-32 + CP2102 dev board)
+#define motorRollerPin 25 //***
+#define motorSpoolPin 26 //***
+#define stepPin 2 //***
+#define dirPin 15 //***
+#define limitSwitchLowPin 35      // Normally LOW //***
+#define limitSwitchHighPin 34     // Normally HIGH //***
+#define encoderPinA 27             // CLK pin (PCNT-capable) //***
+#define encoderPinB 14             // DT pin (PCNT-capable) //***
+#define potPin 4                 // ADC1 input //***
+#define potCurrentPin 33          // ADC1 input //***
+#define switchManualPin 36 // manual control mode
+#define switchLoadPin 39 // load control mode
+#define fanControlPin 33 // fan control pin (PWM)
+#define fanRSpeedPin 32 // fan RPM measurement pin 
+#define extruderSrewPin 23 // Extruder screw 
 
 #define stepsPerRev 200.0 // full steps per revolution (NEMA17)
 #define microsteps 32.0 // microsteps per full step (DRV8825 1/32)
@@ -452,8 +469,8 @@ void pinSetup() {
 
     pinMode(stepPin, OUTPUT);
     pinMode(dirPin, OUTPUT);
-    pinMode(limitSwitchLowPin, INPUT_PULLUP);
-    pinMode(limitSwitchHighPin, INPUT_PULLUP);
+    pinMode(limitSwitchLowPin, INPUT);
+    pinMode(limitSwitchHighPin, INPUT);
     attachInterrupt(digitalPinToInterrupt(limitSwitchHighPin), StepperLimit, CHANGE);
 
     pinMode(motorRollerPin, OUTPUT);
