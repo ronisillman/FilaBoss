@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include <Adafruit_INA219.h>
 #include <Adafruit_AS5600.h>
+#include <AccelStepper.h>
 #include "pid.h"
 #include "driver/pcnt.h"
 
@@ -55,7 +56,7 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 #define led3Pin 4 // Led 3 //***
 
 #define stepsPerRev 200.0 // full steps per revolution (NEMA17)
-#define microsteps 32.0 // microsteps per full step (DRV8825 1/32)
+#define microsteps 16.0 // microsteps per full step (DRV8825 1/32)
 
 #define leadScrewPitch 0.002 //m per revolution
 #define ApproachStepInterval 1000.0 // microseconds between steps
@@ -87,6 +88,12 @@ void parseSerialSetpoints(char* input);
 void initFanControlAndTach();
 void setFanDutyPercent(uint8_t percent);
 void updateFanRpm();
+void enterLoadMode();
+void exitLoadMode();
+void updateLoadMode(unsigned long microsCurrent);
+void syncGuidePositionFromStepper();
+
+AccelStepper guideStepper(AccelStepper::DRIVER, stepPin, dirPin);
 
 
 const static double stepsPerRevolution = stepsPerRev*microsteps;
@@ -150,9 +157,31 @@ const unsigned long STOP_TIMEOUT_MS = 300;
 
 // Ignore tiny near-zero speed noise when integrating traveled distance.
 const float SPEED_DEADBAND_MPS = 0.0002f; // 0.2 mm/s
+const float STEPPER_SPEED_FILTER_ALPHA = 0.08f; // Stronger smoothing to reduce audible jitter
+const float STEPPER_MIN_SPEED_MPS = 0.0010f;    // Below this, stop stepping to avoid dithering noise
+const float STEPPER_ACCEL_LIMIT_STEPS_S2 = 25000.0f; // Stepper speed slew-rate limit
 unsigned long lastDistanceUpdateMs = 0;
 char serialInputBuffer[64];
 uint8_t serialInputIndex = 0;
+
+// Fixed direction used for load-mode homing toward the low/home limit switch.
+const int LOAD_HOME_DIRECTION = LOW;
+
+// Use the same stepper speed formulation as standalone stepperControl test during load homing.
+const double LOAD_HOME_FILAMENT_SPEED_MPS = 0.5;
+
+double filteredFilamentSpeed = 0.0;
+double commandedStepperSpeed = 0.0;
+unsigned long lastStepperCtrlUs = 0;
+long lastStepperPosSteps = 0;
+
+enum LoadState {
+    LOAD_IDLE = 0,
+    LOAD_HOMING,
+    LOAD_WAIT_PHASE
+};
+
+LoadState loadState = LOAD_IDLE;
 
 // Input encoder variables
 // Define rotary encoder pins
@@ -173,6 +202,19 @@ void setup() {
     Serial.println("Starting filament guide control system...");
     pinSetup();
     Serial.println("Pins initialized.");
+
+    guideStepper.setMinPulseWidth(2);
+    guideStepper.setMaxSpeed(20000.0);
+    guideStepper.setAcceleration(40000.0);
+    guideStepper.setSpeed(0.0);
+    guideStepper.setCurrentPosition(0);
+    lastStepperPosSteps = 0;
+
+    // On reset, force normal mode to move toward the low/home limit first.
+    stepDirection = LOAD_HOME_DIRECTION;
+    guidePosition = guideMaxPosition;
+    digitalWrite(dirPin, stepDirection);
+
     initPCNT();
     Serial.println("PCNT initialized.");
     initFanControlAndTach();
@@ -203,6 +245,7 @@ void setup() {
 void loop() {
     unsigned long currentMillis = millis();
     unsigned long microsCurrent = micros();
+    bool loadSwitchActive = (digitalRead(switchLoadPin) == LOW); // active-low switch: ON -> GND
 
     static unsigned long lastMeasurementMs = 0;
     static unsigned long lastMagnetometerMs = 0;
@@ -212,12 +255,23 @@ void loop() {
     static unsigned long lastFanMeasurementMs = 0;
     static unsigned long lastDiagnoseCallMs = 0;
 
-    // Keep step generation in the fastest path for minimum timing jitter.
-    stepperControl(microsCurrent, speed);
-    //stepperControl(microsCurrent, 0.5); // Test with a constant speed command to verify stepper control independently of speed measurement
+    if (loadSwitchActive && loadState == LOAD_IDLE) {
+        enterLoadMode();
+    } else if (!loadSwitchActive && loadState != LOAD_IDLE) {
+        exitLoadMode();
+    }
+
+    if (loadState != LOAD_IDLE) {
+        updateLoadMode(microsCurrent);
+    } else {
+        // Keep step generation in the fastest path for minimum timing jitter.
+        stepperControl(microsCurrent, targetSpeed);
+        //stepperControl(microsCurrent, 0.5); // Test with a constant speed command to verify stepper control independently of speed measurement
+    }
+
     pollPcntPulseEvent();
 
-    if (limitSwitchEvent) {
+    if (limitSwitchEvent && loadState == LOAD_IDLE) {
         noInterrupts();
         limitSwitchEvent = false;
         interrupts();
@@ -260,7 +314,7 @@ void loop() {
         lastSerialInputMs = currentMillis;
     }
 
-    if (currentMillis - lastMotorCtrlMs >= MOTOR_CTRL_PERIOD_MS) {
+    if (currentMillis - lastMotorCtrlMs >= MOTOR_CTRL_PERIOD_MS && loadState == LOAD_IDLE) {
         motorControl(targetSpeed, speed);
         lastMotorCtrlMs = currentMillis;
     }
@@ -365,6 +419,8 @@ void diagnose(unsigned long interval) {
         Serial.print(fanRpm, 0);
         Serial.print(",fan_duty:");
         Serial.print(fanDutyPercent);
+        Serial.print(",load_state:");
+        Serial.print((int)loadState);
         //Serial.print(",mag_speed:");
         //Serial.print(magnetometerSpeed * 1000.0f);
         /* Serial.print(",target_current:");
@@ -410,20 +466,52 @@ void motorControl(float setSpeed, float actualSpeed) {
 /// @param microsCurrent //current time in microseconds for timing control of the stepper motor
 /// @param filamentSpeed //desired filament speed in m/s, used to calculate the required stepper speed for the guide
 void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
-  // Same core math as your original code
-  double spoolOmega = filamentSpeed / (spoolRadius + layerNumber * filamentDiameter);
-  double guideOmega = spoolOmega * ratio;
-  stepperSpeed = guideOmega / (2.0 * PI) * stepsPerRevolution;
+    (void)microsCurrent;
 
-  if (stepperSpeed <= 0.0) return;
-  double stepIntervalSeconds = 1.0 / stepperSpeed;
+    if (lastStepperCtrlUs == 0) {
+        lastStepperCtrlUs = micros();
+    }
+
+    unsigned long nowUs = micros();
+    double dt = (double)(nowUs - lastStepperCtrlUs) / 1000000.0;
+    if (dt < 0.0) dt = 0.0;
+    if (dt > 0.05) dt = 0.05;
+    lastStepperCtrlUs = nowUs;
+
+    syncGuidePositionFromStepper();
+
+    // Smooth noisy filament speed to reduce audible jitter.
+    filteredFilamentSpeed += STEPPER_SPEED_FILTER_ALPHA * (filamentSpeed - filteredFilamentSpeed);
+
+    double desiredStepperSpeed = 0.0;
+    if (filteredFilamentSpeed > STEPPER_MIN_SPEED_MPS) {
+        double spoolOmega = filteredFilamentSpeed / (spoolRadius + layerNumber * filamentDiameter);
+        double guideOmega = spoolOmega * ratio;
+        desiredStepperSpeed = guideOmega / (2.0 * PI) * stepsPerRevolution;
+    }
+
+    // Apply slew-rate limit so step frequency changes smoothly.
+    double maxDelta = STEPPER_ACCEL_LIMIT_STEPS_S2 * dt;
+    double speedError = desiredStepperSpeed - commandedStepperSpeed;
+    if (speedError > maxDelta) speedError = maxDelta;
+    if (speedError < -maxDelta) speedError = -maxDelta;
+    commandedStepperSpeed += speedError;
+
+    stepperSpeed = commandedStepperSpeed;
+    if (stepperSpeed <= 0.0) {
+        guideStepper.setSpeed(0.0);
+        guideStepper.runSpeed();
+        return;
+    }
 
   // Count one layer when reaching max while moving forward, then reverse.
   if (guidePosition >= guideMaxPosition && stepDirection == HIGH) {
     guidePosition = guideMaxPosition;
     layerNumber++;
     stepDirection = LOW;
-    digitalWrite(dirPin, stepDirection);
+        long clampedSteps = (long)(guidePosition * stepsPerRevolution / leadScrewPitch);
+        guideStepper.setCurrentPosition(clampedSteps);
+        lastStepperPosSteps = clampedSteps;
   }
 
   // Count one layer when reaching zero while moving backward, then reverse.
@@ -431,24 +519,114 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
     guidePosition = 0.0;
     layerNumber++;
     stepDirection = HIGH;
+        guideStepper.setCurrentPosition(0);
+        lastStepperPosSteps = 0;
+  }
+
+        double signedStepSpeed = (stepDirection == HIGH) ? stepperSpeed : -stepperSpeed;
+        guideStepper.setSpeed(signedStepSpeed);
+        guideStepper.runSpeed();
+        syncGuidePositionFromStepper();
+}
+
+void enterLoadMode() {
+    loadState = LOAD_HOMING;
+    stepDirection = LOAD_HOME_DIRECTION; // drive guide toward low/home end
     digitalWrite(dirPin, stepDirection);
-  }
+    digitalWrite(stepPin, LOW);
+    microsPrevStep = micros();
+    guideStepper.setSpeed(0.0);
+    analogWrite(motorRollerPin, 0);
+    analogWrite(motorSpoolPin, 0);
+}
 
-  // Same non-blocking toggle stepping style from original
-  if (microsCurrent - microsPrevStep >= (unsigned long)(1000000.0 * stepIntervalSeconds * 0.5)) {
-    unsigned int state = digitalRead(stepPin);
-    digitalWrite(stepPin, !state);
-    microsPrevStep = microsCurrent;
+void exitLoadMode() {
+    loadState = LOAD_IDLE;
 
-    // Update position on rising edge only (same as original)
-    //if (state == HIGH) {
-      if (stepDirection == HIGH) {
-        guidePosition += leadScrewPitch / stepsPerRevolution;
-      } else {
-        guidePosition -= leadScrewPitch / stepsPerRevolution;
-      }
-    //}
-  }
+    // Reset winding state when leaving load mode.
+    traveledDistance = 0.0;
+    guidePosition = 0.0;
+    layerNumber = 0;
+    stepDirection = HIGH; // move away from home/low limit when normal mode resumes
+    digitalWrite(dirPin, stepDirection);
+
+    digitalWrite(stepPin, LOW);
+    analogWrite(motorRollerPin, 0);
+    analogWrite(motorSpoolPin, 0);
+}
+
+void updateLoadMode(unsigned long microsCurrent) {
+    switch (loadState) {
+        case LOAD_HOMING:
+            analogWrite(motorSpoolPin, 0); // spool stands still in load mode
+            RollerPID.setSetpoint(targetSpeed);
+            analogWrite(motorRollerPin, RollerPID.compute(speed)); // pulley keeps PID control
+
+            // Keep homing direction pinned every cycle.
+            stepDirection = LOAD_HOME_DIRECTION;
+            digitalWrite(dirPin, stepDirection);
+
+            // Same speed math style as stepperControl test, with fixed load homing speed input.
+            {
+                double spoolOmega = LOAD_HOME_FILAMENT_SPEED_MPS / (spoolRadius + layerNumber * filamentDiameter);
+                double guideOmega = spoolOmega * ratio;
+                stepperSpeed = guideOmega / (2.0 * PI) * stepsPerRevolution;
+            }
+
+            // Stop when low/home limit is reached.
+            if (digitalRead(limitSwitchLowPin) == HIGH) {
+                guidePosition = 0.0;
+                digitalWrite(stepPin, LOW);
+                loadState = LOAD_WAIT_PHASE;
+                break;
+            }
+
+            if (stepperSpeed > 0.0) {
+                double stepIntervalSeconds = 1.0 / stepperSpeed;
+                unsigned long halfStepUs = (unsigned long)(1000000.0 * stepIntervalSeconds * 0.5);
+                if (halfStepUs < 2) {
+                    halfStepUs = 2;
+                }
+
+                // Catch up missed step toggles when loop timing is slower than target step rate.
+                int maxCatchupToggles = 200;
+                while ((microsCurrent - microsPrevStep >= halfStepUs) && (maxCatchupToggles-- > 0)) {
+                    unsigned int state = digitalRead(stepPin);
+                    unsigned int nextState = !state;
+                    digitalWrite(stepPin, nextState);
+                    microsPrevStep += halfStepUs;
+
+                    // Update guide position only on STEP rising edge.
+                    if (nextState == HIGH) {
+                        if (stepDirection == HIGH) {
+                            guidePosition += leadScrewPitch / stepsPerRevolution;
+                        } else {
+                            guidePosition -= leadScrewPitch / stepsPerRevolution;
+                        }
+                    }
+                }
+            }
+            break;
+
+        case LOAD_WAIT_PHASE:
+            analogWrite(motorSpoolPin, 0); // spool stands still in load phase
+            RollerPID.setSetpoint(targetSpeed);
+            analogWrite(motorRollerPin, RollerPID.compute(speed)); // pulley keeps PID control while waiting
+            break;
+
+        case LOAD_IDLE:
+        default:
+            break;
+    }
+}
+
+void syncGuidePositionFromStepper() {
+    long currentPosSteps = guideStepper.currentPosition();
+    long deltaSteps = currentPosSteps - lastStepperPosSteps;
+    if (deltaSteps != 0) {
+        guidePosition += ((double)deltaSteps) * (leadScrewPitch / stepsPerRevolution);
+        lastStepperPosSteps = currentPosSteps;
+    }
 }
 
 void IRAM_ATTR StepperLimit(){
@@ -569,6 +747,8 @@ void pinSetup() {
 
     pinMode (encoderPinA, INPUT);
     pinMode (encoderPinB, INPUT);
+    pinMode(switchManualPin, INPUT); // external pull-up expected, switch pulls to GND
+    pinMode(switchLoadPin, INPUT);   // external pull-up expected, switch pulls to GND
     /*
     pinMode(ENC_A, INPUT_PULLUP);
     pinMode(ENC_B, INPUT_PULLUP);
