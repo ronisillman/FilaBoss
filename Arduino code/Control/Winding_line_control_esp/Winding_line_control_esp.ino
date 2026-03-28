@@ -47,12 +47,12 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 //#define potCurrentPin 33          // ADC1 input //***
 #define switchManualPin 36 // manual control mode //***
 #define switchLoadPin 39 // load control mode //***
-#define fanControlPin 33 // fan control pin (PWM)
-#define fanRSpeedPin 32 // fan RPM measurement pin 
-#define extruderSrewPin 23 // Extruder screw 
-#define led1Pin 19 // Led 1
-#define led2Pin 18 // Led 2
-#define led3Pin 4 // Led 3
+#define fanControlPin 33 // fan control pin (PWM) //*** 
+#define fanRSpeedPin 32 // fan RPM measurement pin //***
+#define extruderSrewPin 23 // Extruder screw //this needs to be tested
+#define led1Pin 19 // Led 1 //*** 
+#define led2Pin 18 // Led 2 //*** 
+#define led3Pin 4 // Led 3 //***
 
 #define stepsPerRev 200.0 // full steps per revolution (NEMA17)
 #define microsteps 32.0 // microsteps per full step (DRV8825 1/32)
