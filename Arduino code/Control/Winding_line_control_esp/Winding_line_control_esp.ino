@@ -43,13 +43,16 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 #define limitSwitchHighPin 34     // Normally HIGH //***
 #define encoderPinA 27             // CLK pin (PCNT-capable) //***
 #define encoderPinB 14             // DT pin (PCNT-capable) //***
-#define potPin 4                 // ADC1 input //***
-#define potCurrentPin 33          // ADC1 input //***
+//#define potPin 4                 // ADC1 input //***
+//#define potCurrentPin 33          // ADC1 input //***
 #define switchManualPin 36 // manual control mode
 #define switchLoadPin 39 // load control mode
 #define fanControlPin 33 // fan control pin (PWM)
 #define fanRSpeedPin 32 // fan RPM measurement pin 
 #define extruderSrewPin 23 // Extruder screw 
+#define led1Pin 19 // Led 1
+#define led2Pin 18 // Led 2
+#define led3Pin 4 // Led 3
 
 #define stepsPerRev 200.0 // full steps per revolution (NEMA17)
 #define microsteps 32.0 // microsteps per full step (DRV8825 1/32)
@@ -78,6 +81,8 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 void IRAM_ATTR StepperLimit();
 void initPCNT();
 void pollPcntPulseEvent();
+void processSerialInput();
+void parseSerialSetpoints(char* input);
 
 
 const static double stepsPerRevolution = stepsPerRev*microsteps;
@@ -131,7 +136,7 @@ double magnetometerSpeed = 0.0; // m/s
 const unsigned long MEASUREMENT_PERIOD_MS = 5;
 const unsigned long MAGNETOMETER_PERIOD_MS = 20;
 const unsigned long DISTANCE_PERIOD_MS = 20;
-const unsigned long POT_PERIOD_MS = 20;
+const unsigned long SERIAL_INPUT_PERIOD_MS = 20;
 const unsigned long MOTOR_CTRL_PERIOD_MS = 10;
 const unsigned long DIAGNOSE_CALL_PERIOD_MS = 20;
 const unsigned long STOP_TIMEOUT_MS = 300;
@@ -139,6 +144,8 @@ const unsigned long STOP_TIMEOUT_MS = 300;
 // Ignore tiny near-zero speed noise when integrating traveled distance.
 const float SPEED_DEADBAND_MPS = 0.0002f; // 0.2 mm/s
 unsigned long lastDistanceUpdateMs = 0;
+char serialInputBuffer[64];
+uint8_t serialInputIndex = 0;
 
 // Input encoder variables
 // Define rotary encoder pins
@@ -164,6 +171,8 @@ void setup() {
     Serial.println("Initializing I2C peripherals...");
     initI2CPeripherals();
     Serial.println("I2C peripherals initialized.");
+    Serial.println("Serial setpoint input enabled.");
+    Serial.println("Use: S=0.02 (m/s), C=50 (mA), or 0.02,50");
     
     // Set output limits for PID controllers
     SpoolPID.setOutputLimits(0, DAC_maxValue); // Set output limits for spool motor control
@@ -189,7 +198,7 @@ void loop() {
     static unsigned long lastMeasurementMs = 0;
     static unsigned long lastMagnetometerMs = 0;
     static unsigned long lastDistanceMs = 0;
-    static unsigned long lastPotMs = 0;
+    static unsigned long lastSerialInputMs = 0;
     static unsigned long lastMotorCtrlMs = 0;
     static unsigned long lastDiagnoseCallMs = 0;
 
@@ -236,10 +245,9 @@ void loop() {
         lastDistanceMs = currentMillis;
     }
 
-    if (currentMillis - lastPotMs >= POT_PERIOD_MS) {
-        potSpeedControl(); // Update target speed based on potentiometer reading
-        potCurrentControl(); // Update target current based on potentiometer reading
-        lastPotMs = currentMillis;
+    if (currentMillis - lastSerialInputMs >= SERIAL_INPUT_PERIOD_MS) {
+        processSerialInput(); // Update setpoints from Serial Monitor input
+        lastSerialInputMs = currentMillis;
     }
 
     if (currentMillis - lastMotorCtrlMs >= MOTOR_CTRL_PERIOD_MS) {
@@ -498,9 +506,6 @@ void pinSetup() {
 
     pinMode (encoderPinA, INPUT);
     pinMode (encoderPinB, INPUT);
-
-    pinMode(potPin, INPUT);
-    pinMode(potCurrentPin, INPUT);
     /*
     pinMode(ENC_A, INPUT_PULLUP);
     pinMode(ENC_B, INPUT_PULLUP);
@@ -630,15 +635,73 @@ void updateMeasurements() {
     decaySpeed(); // Decay speed estimate if no pulses received, should be called regularly in loop
 }
 
-void potSpeedControl() {
-    float potValue = analogRead(potPin); // Read potentiometer value (0-4095 for ESP32 12-bit ADC)
-    targetSpeed = ((ADC_maxValue - potValue) / ADC_maxValue) * 0.03; // Inverted map: 0.01-0.03 m/s
-    //targetSpeed = 0.02;
+void processSerialInput() {
+    while (Serial.available() > 0) {
+        char c = (char)Serial.read();
+
+        if (c == '\r') {
+            continue;
+        }
+
+        if (c == '\n') {
+            serialInputBuffer[serialInputIndex] = '\0';
+            if (serialInputIndex > 0) {
+                parseSerialSetpoints(serialInputBuffer);
+            }
+            serialInputIndex = 0;
+            continue;
+        }
+
+        if (serialInputIndex < sizeof(serialInputBuffer) - 1) {
+            serialInputBuffer[serialInputIndex++] = c;
+        } else {
+            serialInputIndex = 0;
+        }
+    }
 }
 
-void potCurrentControl() {
-    float potValue = analogRead(potCurrentPin); // Read potentiometer value (0-4095 for ESP32 12-bit ADC)
-    SetTorqueCurrent = ((ADC_maxValue - potValue) / ADC_maxValue) * 200.0; // Inverted map: max pot -> min current
+void parseSerialSetpoints(char* input) {
+    if (strcmp(input, "help") == 0) {
+        Serial.println("Commands: S=0.02 (m/s), C=50 (mA), or 0.02,50");
+        return;
+    }
+
+    char* comma = strchr(input, ',');
+    if (comma != nullptr) {
+        *comma = '\0';
+        float speedIn = atof(input);
+        float currentIn = atof(comma + 1);
+        targetSpeed = constrain(speedIn, 0.0f, 0.03f);
+        SetTorqueCurrent = constrain(currentIn, 0.0f, 200.0f);
+
+        Serial.print("Updated setpoints -> speed(m/s):");
+        Serial.print(targetSpeed, 4);
+        Serial.print(", current(mA):");
+        Serial.println(SetTorqueCurrent, 1);
+        return;
+    }
+
+    if (input[0] == 'S' || input[0] == 's') {
+        char* valuePtr = input + 1;
+        if (*valuePtr == '=') valuePtr++;
+        float speedIn = atof(valuePtr);
+        targetSpeed = constrain(speedIn, 0.0f, 0.03f);
+        Serial.print("Updated speed setpoint (m/s): ");
+        Serial.println(targetSpeed, 4);
+        return;
+    }
+
+    if (input[0] == 'C' || input[0] == 'c') {
+        char* valuePtr = input + 1;
+        if (*valuePtr == '=') valuePtr++;
+        float currentIn = atof(valuePtr);
+        SetTorqueCurrent = constrain(currentIn, 0.0f, 200.0f);
+        Serial.print("Updated current setpoint (mA): ");
+        Serial.println(SetTorqueCurrent, 1);
+        return;
+    }
+
+    Serial.println("Invalid command. Use help, S=0.02, C=50, or 0.02,50");
 }
 
 // Encoder pulse events are sourced from PCNT polling in pollPcntPulseEvent().
