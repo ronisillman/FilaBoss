@@ -45,8 +45,8 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 #define encoderPinB 14             // DT pin (PCNT-capable) //***
 //#define potPin 4                 // ADC1 input //***
 //#define potCurrentPin 33          // ADC1 input //***
-#define switchManualPin 36 // manual control mode
-#define switchLoadPin 39 // load control mode
+#define switchManualPin 36 // manual control mode //***
+#define switchLoadPin 39 // load control mode //***
 #define fanControlPin 33 // fan control pin (PWM)
 #define fanRSpeedPin 32 // fan RPM measurement pin 
 #define extruderSrewPin 23 // Extruder screw 
@@ -76,6 +76,7 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 #define SpeedFilterAlpha 0.03 // Smoothing factor for speed measurements
 
 #define PCNT_UNIT_USED PCNT_UNIT_0
+#define FAN_PCNT_UNIT PCNT_UNIT_1
 #define PCNT_H_LIM 32767
 
 void IRAM_ATTR StepperLimit();
@@ -83,6 +84,9 @@ void initPCNT();
 void pollPcntPulseEvent();
 void processSerialInput();
 void parseSerialSetpoints(char* input);
+void initFanControlAndTach();
+void setFanDutyPercent(uint8_t percent);
+void updateFanRpm();
 
 
 const static double stepsPerRevolution = stepsPerRev*microsteps;
@@ -131,6 +135,8 @@ bool as5600InitPrinted = false;
 uint16_t prevAs5600Angle = 0;
 unsigned long prevAs5600Time = 0;
 double magnetometerSpeed = 0.0; // m/s
+double fanRpm = 0.0; // RPM
+uint8_t fanDutyPercent = 40; // percent, 0..100
 
 // Loop task periods (ms). Keep stepperControl in the fast path every iteration.
 const unsigned long MEASUREMENT_PERIOD_MS = 5;
@@ -139,6 +145,7 @@ const unsigned long DISTANCE_PERIOD_MS = 20;
 const unsigned long SERIAL_INPUT_PERIOD_MS = 20;
 const unsigned long MOTOR_CTRL_PERIOD_MS = 10;
 const unsigned long DIAGNOSE_CALL_PERIOD_MS = 20;
+const unsigned long FAN_MEASUREMENT_PERIOD_MS = 1000;
 const unsigned long STOP_TIMEOUT_MS = 300;
 
 // Ignore tiny near-zero speed noise when integrating traveled distance.
@@ -168,11 +175,13 @@ void setup() {
     Serial.println("Pins initialized.");
     initPCNT();
     Serial.println("PCNT initialized.");
+    initFanControlAndTach();
+    Serial.println("Fan control initialized.");
     Serial.println("Initializing I2C peripherals...");
     initI2CPeripherals();
     Serial.println("I2C peripherals initialized.");
     Serial.println("Serial setpoint input enabled.");
-    Serial.println("Use: S=0.02 (m/s), C=50 (mA), or 0.02,50");
+    Serial.println("Use: S=20 (mm/s), C=50 (mA), F=40 (%), 20,50 or 20,50,40");
     
     // Set output limits for PID controllers
     SpoolPID.setOutputLimits(0, DAC_maxValue); // Set output limits for spool motor control
@@ -200,6 +209,7 @@ void loop() {
     static unsigned long lastDistanceMs = 0;
     static unsigned long lastSerialInputMs = 0;
     static unsigned long lastMotorCtrlMs = 0;
+    static unsigned long lastFanMeasurementMs = 0;
     static unsigned long lastDiagnoseCallMs = 0;
 
     // Keep step generation in the fastest path for minimum timing jitter.
@@ -253,6 +263,11 @@ void loop() {
     if (currentMillis - lastMotorCtrlMs >= MOTOR_CTRL_PERIOD_MS) {
         motorControl(targetSpeed, speed);
         lastMotorCtrlMs = currentMillis;
+    }
+
+    if (currentMillis - lastFanMeasurementMs >= FAN_MEASUREMENT_PERIOD_MS) {
+        updateFanRpm();
+        lastFanMeasurementMs = currentMillis;
     }
 
     if (currentMillis - lastDiagnoseCallMs >= DIAGNOSE_CALL_PERIOD_MS) {
@@ -346,6 +361,10 @@ void diagnose(unsigned long interval) {
         Serial.print(speed * 1000.0f);
         Serial.print(",distance mm:");
         Serial.print(traveledDistance * 1000.0f, 2);
+        Serial.print(",fan_rpm:");
+        Serial.print(fanRpm, 0);
+        Serial.print(",fan_duty:");
+        Serial.print(fanDutyPercent);
         //Serial.print(",mag_speed:");
         //Serial.print(magnetometerSpeed * 1000.0f);
         /* Serial.print(",target_current:");
@@ -465,6 +484,50 @@ void pollPcntPulseEvent() {
         encoderPulseEvent = true;
         prevPcntCount = pcntCount;
     }
+}
+
+void setFanDutyPercent(uint8_t percent) {
+    if (percent > 100) percent = 100;
+    fanDutyPercent = percent;
+    int dutyRaw = map((int)fanDutyPercent, 0, 100, 0, (int)DAC_maxValue);
+    ledcWrite(fanControlPin, dutyRaw);
+}
+
+void initFanControlAndTach() {
+    // ESP32 Arduino Core v3 LEDC API
+    ledcAttach(fanControlPin, 25000, 8);
+    setFanDutyPercent(fanDutyPercent);
+
+    pinMode(fanRSpeedPin, INPUT_PULLUP);
+
+    pcnt_config_t fanPcntConfig = {
+        .pulse_gpio_num = fanRSpeedPin,
+        .ctrl_gpio_num = PCNT_PIN_NOT_USED,
+        .lctrl_mode = PCNT_MODE_KEEP,
+        .hctrl_mode = PCNT_MODE_KEEP,
+        .pos_mode = PCNT_COUNT_INC,
+        .neg_mode = PCNT_COUNT_DIS,
+        .counter_h_lim = PCNT_H_LIM,
+        .counter_l_lim = 0,
+        .unit = FAN_PCNT_UNIT,
+        .channel = PCNT_CHANNEL_0,
+    };
+
+    pcnt_unit_config(&fanPcntConfig);
+    // Approx. 5 us digital glitch filter at 80 MHz APB clock -> 5e-6 * 80e6 = 400
+    pcnt_set_filter_value(FAN_PCNT_UNIT, 400);
+    pcnt_filter_enable(FAN_PCNT_UNIT);
+    pcnt_counter_pause(FAN_PCNT_UNIT);
+    pcnt_counter_clear(FAN_PCNT_UNIT);
+    pcnt_counter_resume(FAN_PCNT_UNIT);
+}
+
+void updateFanRpm() {
+    int16_t pulseCount = 0;
+    pcnt_get_counter_value(FAN_PCNT_UNIT, &pulseCount);
+    pcnt_counter_clear(FAN_PCNT_UNIT);
+
+    fanRpm = ((float)pulseCount * 60.0f) / 2.0f; // 2 pulses/rev fan tach
 }
 
 /// @brief Initialize I2C peripherals (current sensors) and check for their presence. If a sensor is not found, print an error message and halt execution.
@@ -662,32 +725,50 @@ void processSerialInput() {
 
 void parseSerialSetpoints(char* input) {
     if (strcmp(input, "help") == 0) {
-        Serial.println("Commands: S=0.02 (m/s), C=50 (mA), or 0.02,50");
+        Serial.println("Commands: S=20 (mm/s), C=50 (mA), F=40 (%), 20,50 or 20,50,40");
         return;
     }
 
-    char* comma = strchr(input, ',');
-    if (comma != nullptr) {
-        *comma = '\0';
-        float speedIn = atof(input);
-        float currentIn = atof(comma + 1);
-        targetSpeed = constrain(speedIn, 0.0f, 0.03f);
-        SetTorqueCurrent = constrain(currentIn, 0.0f, 200.0f);
+    char* comma1 = strchr(input, ',');
+    if (comma1 != nullptr) {
+        *comma1 = '\0';
+        float speedInMmS = atof(input);
+        char* secondPart = comma1 + 1;
+        char* comma2 = strchr(secondPart, ',');
 
-        Serial.print("Updated setpoints -> speed(m/s):");
-        Serial.print(targetSpeed, 4);
+        float currentIn = 0.0f;
+        int fanDutyIn = fanDutyPercent;
+
+        if (comma2 != nullptr) {
+            *comma2 = '\0';
+            currentIn = atof(secondPart);
+            fanDutyIn = atoi(comma2 + 1);
+        } else {
+            currentIn = atof(secondPart);
+        }
+
+        float speedInMS = constrain(speedInMmS, 0.0f, 30.0f) / 1000.0f;
+        targetSpeed = speedInMS;
+        SetTorqueCurrent = constrain(currentIn, 0.0f, 200.0f);
+        setFanDutyPercent((uint8_t)constrain(fanDutyIn, 0, 100));
+
+        Serial.print("Updated setpoints -> speed(mm/s):");
+        Serial.print(targetSpeed * 1000.0f, 2);
         Serial.print(", current(mA):");
-        Serial.println(SetTorqueCurrent, 1);
+        Serial.print(SetTorqueCurrent, 1);
+        Serial.print(", fan(%):");
+        Serial.println(fanDutyPercent);
         return;
     }
 
     if (input[0] == 'S' || input[0] == 's') {
         char* valuePtr = input + 1;
         if (*valuePtr == '=') valuePtr++;
-        float speedIn = atof(valuePtr);
-        targetSpeed = constrain(speedIn, 0.0f, 0.03f);
-        Serial.print("Updated speed setpoint (m/s): ");
-        Serial.println(targetSpeed, 4);
+        float speedInMmS = atof(valuePtr);
+        float speedInMS = constrain(speedInMmS, 0.0f, 30.0f) / 1000.0f;
+        targetSpeed = speedInMS;
+        Serial.print("Updated speed setpoint (mm/s): ");
+        Serial.println(targetSpeed * 1000.0f, 2);
         return;
     }
 
@@ -701,7 +782,17 @@ void parseSerialSetpoints(char* input) {
         return;
     }
 
-    Serial.println("Invalid command. Use help, S=0.02, C=50, or 0.02,50");
+    if (input[0] == 'F' || input[0] == 'f') {
+        char* valuePtr = input + 1;
+        if (*valuePtr == '=') valuePtr++;
+        int fanDutyIn = atoi(valuePtr);
+        setFanDutyPercent((uint8_t)constrain(fanDutyIn, 0, 100));
+        Serial.print("Updated fan duty (%): ");
+        Serial.println(fanDutyPercent);
+        return;
+    }
+
+    Serial.println("Invalid command. Use help, S=20, C=50, F=40, 20,50 or 20,50,40");
 }
 
 // Encoder pulse events are sourced from PCNT polling in pollPcntPulseEvent().
