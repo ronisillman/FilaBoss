@@ -277,7 +277,7 @@ void loop() {
         interrupts();
 
         if (digitalRead(limitSwitchLowPin) == HIGH) {
-            stepDirection = HIGH;
+            stepDirection = LOW;
             guidePosition = 0.0;
             layerNumber++;
             digitalWrite(dirPin, stepDirection);
@@ -523,7 +523,7 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
         lastStepperPosSteps = 0;
   }
 
-        double signedStepSpeed = (stepDirection == HIGH) ? stepperSpeed : -stepperSpeed;
+        double signedStepSpeed = (stepDirection == HIGH) ? -stepperSpeed : stepperSpeed;
         guideStepper.setSpeed(signedStepSpeed);
         guideStepper.runSpeed();
         syncGuidePositionFromStepper();
