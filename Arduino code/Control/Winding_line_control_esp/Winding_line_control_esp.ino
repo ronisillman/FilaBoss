@@ -16,7 +16,7 @@ PID SpoolPID(7000, 2500, 5.0);
 PID RollerPID(5000, 1500, 5.0); // for 12v dc motor
 //PID RollerPID(10000, 3000, 5.0); // for 12v dc motor
 
-// Board constants and variables
+// Board constants
 #define ADC_bits 12.0        // ESP32 has 12-bit ADC
 #define DAC_bits 8.0
 const static float ADC_maxValue = pow(2, ADC_bits) - 1; // 4095 for 12-bit ADC
@@ -99,12 +99,16 @@ volatile int stepDirection = HIGH;
 unsigned long microsPrevStep = 0;
 
 double speed = 0.0; //m/s, current speed of the filament, calculated from encoder counts
+double traveledDistance = 0.0;    // m, total distance traveled by the filament, calculated by integrating speed over time
 volatile double stepperSpeed = 0.0; // steps per second, for diagnostics
 
 //Testing new speed measurement
 volatile long encoderTicks = 0;
 volatile uint8_t lastAState = 0;
 int16_t prevPcntCount = 0;
+
+// Calibration variables
+const double speedCal = 500.0 / 703.23f; 
 
 // timing variable
 unsigned long lastDiagnoseTime = 0;
@@ -554,6 +558,7 @@ void updateSpeedByPulse() {
     // With CHANGE interrupt on channel A, we get 2 edges per encoder pulse.
     float revPerSec = 1000.0f / ((float)period * encoderResolution * encoderEdgesPerPulse); // revolutions per second
     float rawSpeed = revPerSec * (2.0f * PI * rollerRadius); // Calculate speed in m/s based on roller radius
+    rawSpeed *= speedCal;
     speed += SpeedFilterAlpha * (rawSpeed - speed); // Apply low-pass filter to smooth speed measurement
     
     lastEncoderPeriod = period;
@@ -567,6 +572,7 @@ void decaySpeed() {
     if (gap_period > lastEncoderPeriod){ // Wait for a full period to elapse before decaying speed, ensures we only decay after missing a pulse
     float revPerSec = 1000.0 / ((float)gap_period * encoderResolution * encoderEdgesPerPulse); // Match encoder edge counting in ISR
     float rawSpeed = revPerSec * (2.0 * PI * rollerRadius); // Calculate raw speed in m/s based on roller radius
+    rawSpeed *= speedCal;
     speed += SpeedFilterAlpha * (rawSpeed - speed); // Apply low-pass filter to smooth speed measurement
     }
 }
