@@ -118,6 +118,7 @@ volatile unsigned long limit_triggered = 0;
 bool interruptAttached = true; // Track interrupt attachment state
 volatile bool limitSwitchEvent = false;
 volatile bool encoderPulseEvent = false;
+bool hasValidPulse = false;
 
 // AS5600 magnetometer speed estimate (same shaft as roller)
 bool as5600Available = false;
@@ -129,9 +130,15 @@ double magnetometerSpeed = 0.0; // m/s
 // Loop task periods (ms). Keep stepperControl in the fast path every iteration.
 const unsigned long MEASUREMENT_PERIOD_MS = 5;
 const unsigned long MAGNETOMETER_PERIOD_MS = 20;
+const unsigned long DISTANCE_PERIOD_MS = 20;
 const unsigned long POT_PERIOD_MS = 20;
 const unsigned long MOTOR_CTRL_PERIOD_MS = 10;
 const unsigned long DIAGNOSE_CALL_PERIOD_MS = 20;
+const unsigned long STOP_TIMEOUT_MS = 300;
+
+// Ignore tiny near-zero speed noise when integrating traveled distance.
+const float SPEED_DEADBAND_MPS = 0.0002f; // 0.2 mm/s
+unsigned long lastDistanceUpdateMs = 0;
 
 // Input encoder variables
 // Define rotary encoder pins
@@ -172,6 +179,7 @@ void setup() {
     encoderPrevTime = millis(); // Initialize encoder timestamp to current time
     lastEncoderPeriod = 100; // Initialize to reasonable default period (~10 Hz)
     prevAs5600Time = millis();
+    lastDistanceUpdateMs = millis();
 }
 
 void loop() {
@@ -180,6 +188,7 @@ void loop() {
 
     static unsigned long lastMeasurementMs = 0;
     static unsigned long lastMagnetometerMs = 0;
+    static unsigned long lastDistanceMs = 0;
     static unsigned long lastPotMs = 0;
     static unsigned long lastMotorCtrlMs = 0;
     static unsigned long lastDiagnoseCallMs = 0;
@@ -220,6 +229,11 @@ void loop() {
     if (currentMillis - lastMagnetometerMs >= MAGNETOMETER_PERIOD_MS) {
         measureMagnetometerSpeed(); // Keep AS5600 speed updated at a controlled rate
         lastMagnetometerMs = currentMillis;
+    }
+
+    if (currentMillis - lastDistanceMs >= DISTANCE_PERIOD_MS) {
+        updateDistance(); // Integrate distance at a fixed interval like other tasks
+        lastDistanceMs = currentMillis;
     }
 
     if (currentMillis - lastPotMs >= POT_PERIOD_MS) {
@@ -322,12 +336,14 @@ void diagnose(unsigned long interval) {
         Serial.print(targetSpeed * 1000.0f);
         Serial.print(",measured_speed:");
         Serial.print(speed * 1000.0f);
+        Serial.print(",distance mm:");
+        Serial.print(traveledDistance * 1000.0f, 2);
         //Serial.print(",mag_speed:");
         //Serial.print(magnetometerSpeed * 1000.0f);
-        Serial.print(",target_current:");
+        /* Serial.print(",target_current:");
         Serial.print(SetTorqueCurrent);
         Serial.print(",measured_current:");
-        Serial.print(SpoolMotorCurrent);
+        Serial.print(SpoolMotorCurrent); */
         /* Serial.print(",limit switch high pin:");
         Serial.print(digitalRead(limitSwitchHighPin));
         Serial.print(",limit switch low pin:");
@@ -563,11 +579,22 @@ void updateSpeedByPulse() {
     
     lastEncoderPeriod = period;
     encoderPrevTime = currentTime;
+    hasValidPulse = true;
 }
 
 void decaySpeed() {
     unsigned long currentTime = millis();
     unsigned long gap_period = currentTime - encoderPrevTime; // Time since last pulse in milliseconds
+
+    if (!hasValidPulse) {
+        speed = 0.0;
+        return;
+    }
+
+    if (gap_period > STOP_TIMEOUT_MS) {
+        speed = 0.0;
+        return;
+    }
 
     if (gap_period > lastEncoderPeriod){ // Wait for a full period to elapse before decaying speed, ensures we only decay after missing a pulse
     float revPerSec = 1000.0 / ((float)gap_period * encoderResolution * encoderEdgesPerPulse); // Match encoder edge counting in ISR
@@ -575,6 +602,23 @@ void decaySpeed() {
     rawSpeed *= speedCal;
     speed += SpeedFilterAlpha * (rawSpeed - speed); // Apply low-pass filter to smooth speed measurement
     }
+
+    if (fabs(speed) < SPEED_DEADBAND_MPS) {
+        speed = 0.0;
+    }
+}
+
+// ---------------- Distance ----------------
+void updateDistance() {
+    unsigned long nowMs = millis();
+    unsigned long dtMs = nowMs - lastDistanceUpdateMs;
+    if (dtMs == 0) return;
+
+    double dt = (double)dtMs / 1000.0;
+    if (fabs(speed) >= SPEED_DEADBAND_MPS) {
+        traveledDistance += speed * dt;
+    }
+    lastDistanceUpdateMs = nowMs;
 }
 
 /// @brief Update current measurements from INA219 sensors and apply a low-pass filter to smooth the readings.
