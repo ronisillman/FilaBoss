@@ -3,6 +3,7 @@
 #include <Adafruit_INA219.h>
 #include <Adafruit_AS5600.h>
 #include <AccelStepper.h>
+#include <TMCStepper.h>
 #include "pid.h"
 #include "driver/pcnt.h"
 
@@ -44,8 +45,6 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 #define limitSwitchHighPin 34     // Normally HIGH //***
 #define encoderPinA 27             // CLK pin (PCNT-capable) //***
 #define encoderPinB 14             // DT pin (PCNT-capable) //***
-//#define potPin 4                 // ADC1 input //***
-//#define potCurrentPin 33          // ADC1 input //***
 #define switchManualPin 36 // manual control mode //***
 #define switchLoadPin 39 // load control mode //***
 #define fanControlPin 33 // fan control pin (PWM) //*** 
@@ -55,8 +54,18 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 #define led2Pin 18 // Led 2 //*** 
 #define led3Pin 4 // Led 3 //***
 
+// TMC2208 UART configuration for guide stepper driver
+#define tmcRx1Pin 12
+#define tmcTx1Pin 13
+#define tmcBaud 115200
+
 #define stepsPerRev 200.0 // full steps per revolution (NEMA17)
-#define microsteps 16.0 // microsteps per full step (DRV8825 1/32)
+const float microsteps = 16.0f; // microsteps per full step
+
+const uint16_t GUIDE_TMC_RUN_CURRENT_MA = 700;
+const uint16_t GUIDE_TMC_HOLD_CURRENT_MA = 300;
+const uint16_t GUIDE_TMC_MICROSTEPS = (uint16_t)(microsteps + 0.5f);
+const float GUIDE_TMC_R_SENSE = 0.11f;
 
 #define leadScrewPitch 0.002 //m per revolution
 #define ApproachStepInterval 1000.0 // microseconds between steps
@@ -92,8 +101,12 @@ void enterLoadMode();
 void exitLoadMode();
 void updateLoadMode(unsigned long microsCurrent);
 void syncGuidePositionFromStepper();
+void initGuideTmcUart();
+void setGuideDriverCurrent(uint16_t currentmA);
 
 AccelStepper guideStepper(AccelStepper::DRIVER, stepPin, dirPin);
+HardwareSerial TMCSerial(1);
+TMC2208Stepper guideDriver(&TMCSerial, GUIDE_TMC_R_SENSE);
 
 
 const static double stepsPerRevolution = stepsPerRev*microsteps;
@@ -182,6 +195,8 @@ enum LoadState {
 };
 
 LoadState loadState = LOAD_IDLE;
+bool guideDriverUartReady = false;
+uint16_t guideDriverCurrentmA = 0;
 
 // Input encoder variables
 // Define rotary encoder pins
@@ -209,6 +224,9 @@ void setup() {
     guideStepper.setSpeed(0.0);
     guideStepper.setCurrentPosition(0);
     lastStepperPosSteps = 0;
+
+    initGuideTmcUart();
+    setGuideDriverCurrent(GUIDE_TMC_RUN_CURRENT_MA);
 
     // On reset, force normal mode to move toward the low/home limit first.
     stepDirection = LOAD_HOME_DIRECTION;
@@ -421,6 +439,8 @@ void diagnose(unsigned long interval) {
         Serial.print(fanDutyPercent);
         Serial.print(",load_state:");
         Serial.print((int)loadState);
+        Serial.print(",tmc_mA:");
+        Serial.print(guideDriverCurrentmA);
         //Serial.print(",mag_speed:");
         //Serial.print(magnetometerSpeed * 1000.0f);
         /* Serial.print(",target_current:");
@@ -531,6 +551,7 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
 
 void enterLoadMode() {
     loadState = LOAD_HOMING;
+    setGuideDriverCurrent(GUIDE_TMC_RUN_CURRENT_MA);
     stepDirection = LOAD_HOME_DIRECTION; // drive guide toward low/home end
     digitalWrite(dirPin, stepDirection);
     digitalWrite(stepPin, LOW);
@@ -542,6 +563,7 @@ void enterLoadMode() {
 
 void exitLoadMode() {
     loadState = LOAD_IDLE;
+    setGuideDriverCurrent(GUIDE_TMC_RUN_CURRENT_MA);
 
     // Reset winding state when leaving load mode.
     traveledDistance = 0.0;
@@ -609,6 +631,7 @@ void updateLoadMode(unsigned long microsCurrent) {
             break;
 
         case LOAD_WAIT_PHASE:
+            setGuideDriverCurrent(GUIDE_TMC_HOLD_CURRENT_MA);
             analogWrite(motorSpoolPin, 0); // spool stands still in load phase
             RollerPID.setSetpoint(targetSpeed);
             analogWrite(motorRollerPin, RollerPID.compute(speed)); // pulley keeps PID control while waiting
@@ -618,6 +641,42 @@ void updateLoadMode(unsigned long microsCurrent) {
         default:
             break;
     }
+}
+
+void initGuideTmcUart() {
+    TMCSerial.begin(tmcBaud, SERIAL_8N1, tmcRx1Pin, tmcTx1Pin);
+    delay(50);
+
+    guideDriver.begin();
+    guideDriver.pdn_disable(true);
+    guideDriver.mstep_reg_select(true);
+    guideDriver.I_scale_analog(false);
+    guideDriver.toff(5);
+    guideDriver.blank_time(24);
+    guideDriver.microsteps(GUIDE_TMC_MICROSTEPS);
+    guideDriver.pwm_autoscale(true);
+
+    uint8_t conn = guideDriver.test_connection();
+    guideDriverUartReady = (conn == 0);
+
+    Serial.print("Guide TMC2208 UART test_connection() = ");
+    Serial.println(conn);
+    if (!guideDriverUartReady) {
+        Serial.println("WARN: Guide TMC2208 UART not responding. Current/microstep commands may be ignored.");
+    }
+}
+
+void setGuideDriverCurrent(uint16_t currentmA) {
+    if (guideDriverCurrentmA == currentmA) {
+        return;
+    }
+
+    guideDriverCurrentmA = currentmA;
+    if (!guideDriverUartReady) {
+        return;
+    }
+
+    guideDriver.rms_current(currentmA);
 }
 
 void syncGuidePositionFromStepper() {
