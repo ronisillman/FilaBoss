@@ -173,15 +173,17 @@ const float SPEED_DEADBAND_MPS = 0.0002f; // 0.2 mm/s
 const float STEPPER_SPEED_FILTER_ALPHA = 0.08f; // Stronger smoothing to reduce audible jitter
 const float STEPPER_MIN_SPEED_MPS = 0.0010f;    // Below this, stop stepping to avoid dithering noise
 const float STEPPER_ACCEL_LIMIT_STEPS_S2 = 25000.0f; // Stepper speed slew-rate limit
+const float STEPPER_ACCEL_LIBRARY_STEPS_S2 = 2200000.0f; // AccelStepper acceleration for normal operation
+const float LOAD_HOME_ACCEL_LIBRARY_STEPS_S2 = 2200000.0f; // AccelStepper acceleration during load homing
+const long LOAD_HOME_TARGET_STEPS = 1000000000L; // Large target so homing runs until limit switch
+const int LOAD_HOME_RUN_BURST = 80; // Run AccelStepper multiple times per loop for high homing throughput
 unsigned long lastDistanceUpdateMs = 0;
 char serialInputBuffer[64];
 uint8_t serialInputIndex = 0;
 
 // Fixed direction used for load-mode homing toward the low/home limit switch.
 const int LOAD_HOME_DIRECTION = LOW;
-
-// Use the same stepper speed formulation as standalone stepperControl test during load homing.
-const double LOAD_HOME_FILAMENT_SPEED_MPS = 0.5;
+const float LOAD_HOME_CONSTANT_SPEED_STEPS_S = 200000.0f;
 
 double filteredFilamentSpeed = 0.0;
 double commandedStepperSpeed = 0.0;
@@ -220,7 +222,7 @@ void setup() {
 
     guideStepper.setMinPulseWidth(2);
     guideStepper.setMaxSpeed(20000.0);
-    guideStepper.setAcceleration(40000.0);
+    guideStepper.setAcceleration(STEPPER_ACCEL_LIBRARY_STEPS_S2);
     guideStepper.setSpeed(0.0);
     guideStepper.setCurrentPosition(0);
     lastStepperPosSteps = 0;
@@ -427,7 +429,7 @@ void diagnose(unsigned long interval) {
         Serial.println();
         // These four for PID plotting in the serial plotter
         */
-        Serial.print("speed_target:");
+        /* Serial.print("speed_target:");
         Serial.print(targetSpeed * 1000.0f);
         Serial.print(",measured_speed:");
         Serial.print(speed * 1000.0f);
@@ -440,7 +442,7 @@ void diagnose(unsigned long interval) {
         Serial.print(",load_state:");
         Serial.print((int)loadState);
         Serial.print(",tmc_mA:");
-        Serial.print(guideDriverCurrentmA);
+        Serial.print(guideDriverCurrentmA); */
         //Serial.print(",mag_speed:");
         //Serial.print(magnetometerSpeed * 1000.0f);
         /* Serial.print(",target_current:");
@@ -457,6 +459,8 @@ void diagnose(unsigned long interval) {
         Serial.print(stepDirection);
         Serial.print(", Step speed: ");
         Serial.print(stepperSpeed); */
+        Serial.print("guide position: ");
+        Serial.print(guidePosition);
 
         Serial.println(); // Newline for serial plotter
     }
@@ -552,11 +556,16 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
 void enterLoadMode() {
     loadState = LOAD_HOMING;
     setGuideDriverCurrent(GUIDE_TMC_RUN_CURRENT_MA);
+
     stepDirection = LOAD_HOME_DIRECTION; // drive guide toward low/home end
-    digitalWrite(dirPin, stepDirection);
     digitalWrite(stepPin, LOW);
     microsPrevStep = micros();
-    guideStepper.setSpeed(0.0);
+    guideStepper.setAcceleration(LOAD_HOME_ACCEL_LIBRARY_STEPS_S2);
+    guideStepper.setMaxSpeed(LOAD_HOME_CONSTANT_SPEED_STEPS_S);
+
+    // Relative target guarantees a fresh homing move every time load mode is entered.
+    long homingDelta = (stepDirection == HIGH) ? -LOAD_HOME_TARGET_STEPS : LOAD_HOME_TARGET_STEPS;
+    guideStepper.move(homingDelta);
     analogWrite(motorRollerPin, 0);
     analogWrite(motorSpoolPin, 0);
 }
@@ -571,6 +580,8 @@ void exitLoadMode() {
     layerNumber = 0;
     stepDirection = HIGH; // move away from home/low limit when normal mode resumes
     digitalWrite(dirPin, stepDirection);
+    guideStepper.setAcceleration(STEPPER_ACCEL_LIBRARY_STEPS_S2);
+    guideStepper.moveTo(guideStepper.currentPosition());
 
     digitalWrite(stepPin, LOW);
     analogWrite(motorRollerPin, 0);
@@ -578,57 +589,43 @@ void exitLoadMode() {
 }
 
 void updateLoadMode(unsigned long microsCurrent) {
+    (void)microsCurrent;
     switch (loadState) {
-        case LOAD_HOMING:
+        case LOAD_HOMING: {
             analogWrite(motorSpoolPin, 0); // spool stands still in load mode
             RollerPID.setSetpoint(targetSpeed);
             analogWrite(motorRollerPin, RollerPID.compute(speed)); // pulley keeps PID control
 
-            // Keep homing direction pinned every cycle.
-            stepDirection = LOAD_HOME_DIRECTION;
-            digitalWrite(dirPin, stepDirection);
+            // Let AccelStepper handle acceleration profile in homing mode.
+            int burst = LOAD_HOME_RUN_BURST;
+            while (burst-- > 0) {
+                if (!guideStepper.run()) {
+                    break;
+                }
+            }
+            syncGuidePositionFromStepper();
+            stepperSpeed = fabs(guideStepper.speed());
 
-            // Same speed math style as stepperControl test, with fixed load homing speed input.
-            {
-                double spoolOmega = LOAD_HOME_FILAMENT_SPEED_MPS / (spoolRadius + layerNumber * filamentDiameter);
-                double guideOmega = spoolOmega * ratio;
-                stepperSpeed = guideOmega / (2.0 * PI) * stepsPerRevolution;
+            // Re-arm if a target was exhausted before switch is reached.
+            if (guideStepper.distanceToGo() == 0) {
+                long homingDelta = (stepDirection == HIGH) ? -LOAD_HOME_TARGET_STEPS : LOAD_HOME_TARGET_STEPS;
+                guideStepper.move(homingDelta);
             }
 
             // Stop when low/home limit is reached.
             if (digitalRead(limitSwitchLowPin) == HIGH) {
                 guidePosition = 0.0;
                 digitalWrite(stepPin, LOW);
+                guideStepper.setSpeed(0.0);
+                guideStepper.setCurrentPosition(0);
+                guideStepper.moveTo(0);
+                lastStepperPosSteps = 0;
+                stepperSpeed = 0.0;
                 loadState = LOAD_WAIT_PHASE;
                 break;
             }
-
-            if (stepperSpeed > 0.0) {
-                double stepIntervalSeconds = 1.0 / stepperSpeed;
-                unsigned long halfStepUs = (unsigned long)(1000000.0 * stepIntervalSeconds * 0.5);
-                if (halfStepUs < 2) {
-                    halfStepUs = 2;
-                }
-
-                // Catch up missed step toggles when loop timing is slower than target step rate.
-                int maxCatchupToggles = 200;
-                while ((microsCurrent - microsPrevStep >= halfStepUs) && (maxCatchupToggles-- > 0)) {
-                    unsigned int state = digitalRead(stepPin);
-                    unsigned int nextState = !state;
-                    digitalWrite(stepPin, nextState);
-                    microsPrevStep += halfStepUs;
-
-                    // Update guide position only on STEP rising edge.
-                    if (nextState == HIGH) {
-                        if (stepDirection == HIGH) {
-                            guidePosition += leadScrewPitch / stepsPerRevolution;
-                        } else {
-                            guidePosition -= leadScrewPitch / stepsPerRevolution;
-                        }
-                    }
-                }
-            }
             break;
+        }
 
         case LOAD_WAIT_PHASE:
             setGuideDriverCurrent(GUIDE_TMC_HOLD_CURRENT_MA);
