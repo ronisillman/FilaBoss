@@ -177,7 +177,7 @@ enum LoadState {
 LoadState loadState = LOAD_IDLE;
 bool guideDriverUartReady = false;
 
-//uint16_t guideDriverCurrentmA = 0;
+uint16_t guideDriverCurrentmA = 0;
 //uint32_t guideDriverStatusRaw = 0;
 //bool guideDriverOtpw = false;
 //bool guideDriverOt = false;
@@ -314,7 +314,7 @@ void loop() {
     } */
 
     if (currentMillis - lastDiagnoseCallMs >= DIAGNOSE_CALL_PERIOD_MS) {
-        diagnose(1000); // Print diagnostics every 1000 ms (1 second)
+        diagnose(); // Print diagnostics every 1000 ms (1 second)
         lastDiagnoseCallMs = currentMillis;
     }
 
