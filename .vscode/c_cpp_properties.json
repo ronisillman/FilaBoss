@@ -1,0 +1,29 @@
+{
+  "version": 4,
+  "configurations": [
+    {
+      "name": "ESP32-Arduino",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "${env:LOCALAPPDATA}/Arduino15/packages/**",
+        "${env:USERPROFILE}/Documents/Arduino/**"
+      ],
+      "browse": {
+        "path": [
+          "${workspaceFolder}",
+          "${env:LOCALAPPDATA}/Arduino15/packages",
+          "${env:USERPROFILE}/Documents/Arduino"
+        ],
+        "limitSymbolsToIncludedHeaders": true
+      },
+      "defines": [
+        "ESP32",
+        "ARDUINO_ARCH_ESP32",
+        "ARDUINO=10819"
+      ],
+      "cStandard": "c11",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "windows-gcc-x64"
+    }
+  ]
+}
