@@ -100,6 +100,7 @@ void syncGuidePositionFromStepper();
 void initGuideTmcUart();
 void setGuideDriverCurrent(uint16_t currentmA);
 void updateGuideDriverStatus();
+void initGuideStepper();
 
 FastAccelStepperEngine stepperEngine = FastAccelStepperEngine();
 FastAccelStepper* guideStepper = nullptr;
@@ -200,16 +201,7 @@ uint32_t guideDriverStatusRaw = 0;
 bool guideDriverOtpw = false;
 bool guideDriverOt = false;
 
-
-void setup() {
-
-    Serial.begin(115200);
-    delay(500);
-    
-    Serial.println("Starting filament guide control system...");
-    pinSetup();
-    Serial.println("Pins initialized.");
-
+void initGuideStepper() {
     stepperEngine.init();
     guideStepper = stepperEngine.stepperConnectToPin(stepPin);
     if (guideStepper == nullptr) {
@@ -225,14 +217,23 @@ void setup() {
     guideMaxPositionSteps = (long)(guideMaxPosition * stepsPerRevolution / leadScrewPitch + 0.5);
     guideStepper->forceStopAndNewPosition((int32_t)guideMaxPositionSteps);
     lastStepperPosSteps = guideMaxPositionSteps;
+}
 
+
+void setup() {
+
+    Serial.begin(115200);
+    delay(500);
+    
+    Serial.println("Starting filament guide control system...");
+    pinSetup();
+    Serial.println("Pins initialized.");
     initGuideTmcUart();
+    Serial.println("TMC2209 UART initialized for guide driver.");
+    initGuideStepper();
+    Serial.println("Guide stepper initialized.");
     setGuideDriverCurrent(GUIDE_TMC_RUN_CURRENT_MA);
 
-    // On reset, force normal mode to move toward the low/home limit first.
-    guideMovingTowardMax = true;
-    guidePosition = guideMaxPosition;
-    guideStepper->stopMove();
 
     initPCNT();
     Serial.println("PCNT initialized.");
