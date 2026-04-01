@@ -6,7 +6,7 @@
 // Use UART1 defaults RX=16, TX=17 for those boards.
 // If you are on ESP32-S3/C3 and GPIO9/10 are actually free on your module,
 // replace these with 9 and 10.
-static const uint8_t TMC_RX1_PIN = 12;
+static const uint8_t TMC_RX1_PIN = 5;
 static const uint8_t TMC_TX1_PIN = 13;
 
 // Optional driver enable pin. Set to -1 if EN is hard-wired.
@@ -19,7 +19,7 @@ static const uint32_t TMC_BAUD = 115200;
 static constexpr float R_SENSE = 0.11f;
 
 HardwareSerial TMCSerial(1);
-TMC2208Stepper driver(&TMCSerial, R_SENSE);
+TMC2209Stepper driver(&TMCSerial, R_SENSE, 0);
 
 static uint32_t lastPrintMs = 0;
 
@@ -51,6 +51,7 @@ void setup() {
   driver.rms_current(500);       // 500 mA test current
   driver.microsteps(16);
   driver.pwm_autoscale(true);
+  driver.en_spreadCycle(false); // enable stealthChop
 
   const uint8_t conn = driver.test_connection();
   Serial.print("test_connection() = ");

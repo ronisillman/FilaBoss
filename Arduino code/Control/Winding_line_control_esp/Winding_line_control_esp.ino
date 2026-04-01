@@ -1,15 +1,13 @@
 //Stepper motor control for the filament guide on a leadscrew
 #include <Wire.h>
 #include <Adafruit_INA219.h>
-#include <Adafruit_AS5600.h>
-#include <AccelStepper.h>
+#include <FastAccelStepper.h>
 #include <TMCStepper.h>
 #include "pid.h"
-#include "driver/pcnt.h"
+#include "driver/pulse_cnt.h"
 
 //two current sensors
 Adafruit_INA219 ina219_spool(0x41);
-Adafruit_AS5600 as5600;
 //Adafruit_INA219 ina219_roller(0x40);
 //PID SpoolPID(0.05, 0.15, 0.0); // Initialize PID controller with example gains
 PID SpoolPID(7000, 2500, 5.0);
@@ -54,23 +52,23 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 #define led2Pin 18 // Led 2 //*** 
 #define led3Pin 4 // Led 3 //***
 
-// TMC2208 UART configuration for guide stepper driver
-#define tmcRx1Pin 12
+// TMC2209 UART configuration for guide stepper drivers
+#define tmcRx1Pin 5
 #define tmcTx1Pin 13
 #define tmcBaud 115200
 
 #define stepsPerRev 200.0 // full steps per revolution (NEMA17)
 const float microsteps = 16.0f; // microsteps per full step
 
-const uint16_t GUIDE_TMC_RUN_CURRENT_MA = 700;
-const uint16_t GUIDE_TMC_HOLD_CURRENT_MA = 300;
+const uint16_t GUIDE_TMC_RUN_CURRENT_MA = 1000;
+const uint16_t GUIDE_TMC_HOLD_CURRENT_MA = 200;
 const uint16_t GUIDE_TMC_MICROSTEPS = (uint16_t)(microsteps + 0.5f);
 const float GUIDE_TMC_R_SENSE = 0.11f;
 
-#define leadScrewPitch 0.002 //m per revolution
+#define leadScrewPitch 0.004 //m per revolution (4 mm pitch)
 #define ApproachStepInterval 1000.0 // microseconds between steps
 
-#define guideMaxPosition 0.04 //m, maximum position of the filament guide
+#define guideMaxPosition 0.05 //m, 5 cm guide travel like standalone test
 #define spoolRadius 0.053 //m, start radius of the filament spool
 #define filamentDiameter 0.00285 //m, diameter of the filament
 #define spoolWidth 0.045 //m, width of the filament spool
@@ -85,8 +83,6 @@ const float GUIDE_TMC_R_SENSE = 0.11f;
 #define CurrentfilterAlpha 0.02 // Smoothing factor for current measurements
 #define SpeedFilterAlpha 0.03 // Smoothing factor for speed measurements
 
-#define PCNT_UNIT_USED PCNT_UNIT_0
-#define FAN_PCNT_UNIT PCNT_UNIT_1
 #define PCNT_H_LIM 32767
 
 void IRAM_ATTR StepperLimit();
@@ -103,10 +99,12 @@ void updateLoadMode(unsigned long microsCurrent);
 void syncGuidePositionFromStepper();
 void initGuideTmcUart();
 void setGuideDriverCurrent(uint16_t currentmA);
+void updateGuideDriverStatus();
 
-AccelStepper guideStepper(AccelStepper::DRIVER, stepPin, dirPin);
+FastAccelStepperEngine stepperEngine = FastAccelStepperEngine();
+FastAccelStepper* guideStepper = nullptr;
 HardwareSerial TMCSerial(1);
-TMC2208Stepper guideDriver(&TMCSerial, GUIDE_TMC_R_SENSE);
+TMC2209Stepper guideDriver(&TMCSerial, GUIDE_TMC_R_SENSE, 0);
 
 
 const static double stepsPerRevolution = stepsPerRev*microsteps;
@@ -123,8 +121,10 @@ double SetTorqueCurrent = 50; //mA, example torque setpoint for testing
 float noLoadCurrent_Spool = 0.0; //mA, base no-load current for spool motor
 float SpoolMotorCurrent = 0.0; //mA, current measurement for spool motor
 
+const bool GUIDE_DIR_PIN_INVERTED = true; // Flip DIR polarity when motor phases are rewired.
+
 // Stepper timing variables
-volatile int stepDirection = HIGH;
+bool guideMovingTowardMax = true;
 unsigned long microsPrevStep = 0;
 
 double speed = 0.0; //m/s, current speed of the filament, calculated from encoder counts
@@ -134,7 +134,14 @@ volatile double stepperSpeed = 0.0; // steps per second, for diagnostics
 //Testing new speed measurement
 volatile long encoderTicks = 0;
 volatile uint8_t lastAState = 0;
-int16_t prevPcntCount = 0;
+int prevPcntCount = 0;
+
+pcnt_unit_handle_t encoderPcntUnit = nullptr;
+pcnt_channel_handle_t encoderPcntChannel = nullptr;
+pcnt_unit_handle_t fanPcntUnit = nullptr;
+pcnt_channel_handle_t fanPcntChannel = nullptr;
+bool encoderPcntReady = false;
+bool fanPcntReady = false;
 
 // Calibration variables
 const double speedCal = 500.0 / 703.23f; 
@@ -149,46 +156,36 @@ volatile bool limitSwitchEvent = false;
 volatile bool encoderPulseEvent = false;
 bool hasValidPulse = false;
 
-// AS5600 magnetometer speed estimate (same shaft as roller)
-bool as5600Available = false;
-bool as5600InitPrinted = false;
-uint16_t prevAs5600Angle = 0;
-unsigned long prevAs5600Time = 0;
-double magnetometerSpeed = 0.0; // m/s
 double fanRpm = 0.0; // RPM
 uint8_t fanDutyPercent = 40; // percent, 0..100
 
 // Loop task periods (ms). Keep stepperControl in the fast path every iteration.
-const unsigned long MEASUREMENT_PERIOD_MS = 5;
-const unsigned long MAGNETOMETER_PERIOD_MS = 20;
-const unsigned long DISTANCE_PERIOD_MS = 20;
-const unsigned long SERIAL_INPUT_PERIOD_MS = 20;
-const unsigned long MOTOR_CTRL_PERIOD_MS = 10;
-const unsigned long DIAGNOSE_CALL_PERIOD_MS = 20;
+const unsigned long MEASUREMENT_PERIOD_MS = 40;
+const unsigned long DISTANCE_PERIOD_MS = 1000;
+const unsigned long SERIAL_INPUT_PERIOD_MS = 200;
+const unsigned long MOTOR_CTRL_PERIOD_MS = 40;
+const unsigned long DIAGNOSE_CALL_PERIOD_MS = 100;
 const unsigned long FAN_MEASUREMENT_PERIOD_MS = 1000;
+const unsigned long TMC_STATUS_PERIOD_MS = 200;
 const unsigned long STOP_TIMEOUT_MS = 300;
 
 // Ignore tiny near-zero speed noise when integrating traveled distance.
 const float SPEED_DEADBAND_MPS = 0.0002f; // 0.2 mm/s
 const float STEPPER_SPEED_FILTER_ALPHA = 0.08f; // Stronger smoothing to reduce audible jitter
 const float STEPPER_MIN_SPEED_MPS = 0.0010f;    // Below this, stop stepping to avoid dithering noise
-const float STEPPER_ACCEL_LIMIT_STEPS_S2 = 25000.0f; // Stepper speed slew-rate limit
-const float STEPPER_ACCEL_LIBRARY_STEPS_S2 = 2200000.0f; // AccelStepper acceleration for normal operation
-const float LOAD_HOME_ACCEL_LIBRARY_STEPS_S2 = 2200000.0f; // AccelStepper acceleration during load homing
-const long LOAD_HOME_TARGET_STEPS = 1000000000L; // Large target so homing runs until limit switch
-const int LOAD_HOME_RUN_BURST = 80; // Run AccelStepper multiple times per loop for high homing throughput
+const float STEPPER_MAX_SPEED_STEPS_S = 10000.0f;
+const float STEPPER_ACCEL_LIBRARY_STEPS_S2 = 10000.0f;
+const float LOAD_HOME_ACCEL_LIBRARY_STEPS_S2 = STEPPER_ACCEL_LIBRARY_STEPS_S2;
 unsigned long lastDistanceUpdateMs = 0;
 char serialInputBuffer[64];
 uint8_t serialInputIndex = 0;
 
-// Fixed direction used for load-mode homing toward the low/home limit switch.
-const int LOAD_HOME_DIRECTION = LOW;
-const float LOAD_HOME_CONSTANT_SPEED_STEPS_S = 200000.0f;
+// Load-mode homing drives toward the low/home limit switch.
+const float LOAD_HOME_CONSTANT_SPEED_STEPS_S = STEPPER_MAX_SPEED_STEPS_S;
 
 double filteredFilamentSpeed = 0.0;
-double commandedStepperSpeed = 0.0;
-unsigned long lastStepperCtrlUs = 0;
 long lastStepperPosSteps = 0;
+long guideMaxPositionSteps = 0;
 
 enum LoadState {
     LOAD_IDLE = 0,
@@ -199,16 +196,9 @@ enum LoadState {
 LoadState loadState = LOAD_IDLE;
 bool guideDriverUartReady = false;
 uint16_t guideDriverCurrentmA = 0;
-
-// Input encoder variables
-// Define rotary encoder pins
-//#define ENC_A 2
-//#define ENC_B 3
-//unsigned long _lastIncReadTime = micros(); 
-//unsigned long _lastDecReadTime = micros(); 
-//#define _pauseLength 25000
-//#define _fastIncrement 10
-//volatile int counter = 0;
+uint32_t guideDriverStatusRaw = 0;
+bool guideDriverOtpw = false;
+bool guideDriverOt = false;
 
 
 void setup() {
@@ -220,20 +210,29 @@ void setup() {
     pinSetup();
     Serial.println("Pins initialized.");
 
-    guideStepper.setMinPulseWidth(2);
-    guideStepper.setMaxSpeed(20000.0);
-    guideStepper.setAcceleration(STEPPER_ACCEL_LIBRARY_STEPS_S2);
-    guideStepper.setSpeed(0.0);
-    guideStepper.setCurrentPosition(0);
-    lastStepperPosSteps = 0;
+    stepperEngine.init();
+    guideStepper = stepperEngine.stepperConnectToPin(stepPin);
+    if (guideStepper == nullptr) {
+        Serial.println("ERROR: guide stepper attach failed");
+        while (1) {
+            delay(10);
+        }
+    }
+
+    guideStepper->setDirectionPin(dirPin, !GUIDE_DIR_PIN_INVERTED);
+    guideStepper->setSpeedInHz((uint32_t)STEPPER_MAX_SPEED_STEPS_S);
+    guideStepper->setAcceleration((uint32_t)STEPPER_ACCEL_LIBRARY_STEPS_S2);
+    guideMaxPositionSteps = (long)(guideMaxPosition * stepsPerRevolution / leadScrewPitch + 0.5);
+    guideStepper->forceStopAndNewPosition((int32_t)guideMaxPositionSteps);
+    lastStepperPosSteps = guideMaxPositionSteps;
 
     initGuideTmcUart();
     setGuideDriverCurrent(GUIDE_TMC_RUN_CURRENT_MA);
 
     // On reset, force normal mode to move toward the low/home limit first.
-    stepDirection = LOAD_HOME_DIRECTION;
+    guideMovingTowardMax = true;
     guidePosition = guideMaxPosition;
-    digitalWrite(dirPin, stepDirection);
+    guideStepper->stopMove();
 
     initPCNT();
     Serial.println("PCNT initialized.");
@@ -255,10 +254,14 @@ void setup() {
 
     //New speed mesurement test
     delay(100); // Short delay to ensure everything is initialized before starting speed measurement
-    pcnt_get_counter_value(PCNT_UNIT_USED, &prevPcntCount);
+    if (encoderPcntReady) {
+        int initialEncoderCount = 0;
+        if (pcnt_unit_get_count(encoderPcntUnit, &initialEncoderCount) == ESP_OK) {
+            prevPcntCount = initialEncoderCount;
+        }
+    }
     encoderPrevTime = millis(); // Initialize encoder timestamp to current time
     lastEncoderPeriod = 100; // Initialize to reasonable default period (~10 Hz)
-    prevAs5600Time = millis();
     lastDistanceUpdateMs = millis();
 }
 
@@ -268,12 +271,12 @@ void loop() {
     bool loadSwitchActive = (digitalRead(switchLoadPin) == LOW); // active-low switch: ON -> GND
 
     static unsigned long lastMeasurementMs = 0;
-    static unsigned long lastMagnetometerMs = 0;
     static unsigned long lastDistanceMs = 0;
     static unsigned long lastSerialInputMs = 0;
     static unsigned long lastMotorCtrlMs = 0;
     static unsigned long lastFanMeasurementMs = 0;
     static unsigned long lastDiagnoseCallMs = 0;
+    static unsigned long lastTmcStatusMs = 0;
 
     if (loadSwitchActive && loadState == LOAD_IDLE) {
         enterLoadMode();
@@ -285,7 +288,7 @@ void loop() {
         updateLoadMode(microsCurrent);
     } else {
         // Keep step generation in the fastest path for minimum timing jitter.
-        stepperControl(microsCurrent, targetSpeed);
+        stepperControl(microsCurrent, speed);
         //stepperControl(microsCurrent, 0.5); // Test with a constant speed command to verify stepper control independently of speed measurement
     }
 
@@ -297,10 +300,13 @@ void loop() {
         interrupts();
 
         if (digitalRead(limitSwitchLowPin) == HIGH) {
-            stepDirection = LOW;
+            guideMovingTowardMax = false;
             guidePosition = 0.0;
             layerNumber++;
-            digitalWrite(dirPin, stepDirection);
+            guideStepper->forceStopAndNewPosition(0);
+            guideStepper->moveTo((int32_t)guideMaxPositionSteps);
+            lastStepperPosSteps = 0;
+            stepperSpeed = 0.0;
             limit_triggered = currentMillis;
             detachInterrupt(digitalPinToInterrupt(limitSwitchHighPin));
             interruptAttached = false; // Mark interrupt as detached
@@ -315,17 +321,12 @@ void loop() {
     }
 
     if (currentMillis - lastMeasurementMs >= MEASUREMENT_PERIOD_MS) {
-        updateMeasurements(); // Update Speed and Current measurements
+        updateMeasurements(loadState == LOAD_IDLE); // Keep speed decay active; skip INA219 current sampling during load mode
         lastMeasurementMs = currentMillis;
     }
 
-    if (currentMillis - lastMagnetometerMs >= MAGNETOMETER_PERIOD_MS) {
-        measureMagnetometerSpeed(); // Keep AS5600 speed updated at a controlled rate
-        lastMagnetometerMs = currentMillis;
-    }
-
-    if (currentMillis - lastDistanceMs >= DISTANCE_PERIOD_MS) {
-        updateDistance(); // Integrate distance at a fixed interval like other tasks
+    if (currentMillis - lastDistanceMs >= DISTANCE_PERIOD_MS && loadState == LOAD_IDLE) {
+        updateDistance(); // Distance tracking is only needed during normal winding mode
         lastDistanceMs = currentMillis;
     }
 
@@ -344,6 +345,11 @@ void loop() {
         lastFanMeasurementMs = currentMillis;
     }
 
+/*     if (currentMillis - lastTmcStatusMs >= TMC_STATUS_PERIOD_MS) {
+        updateGuideDriverStatus();
+        lastTmcStatusMs = currentMillis;
+    } */
+
     if (currentMillis - lastDiagnoseCallMs >= DIAGNOSE_CALL_PERIOD_MS) {
         diagnose(1000); // Print diagnostics every 1000 ms (1 second)
         lastDiagnoseCallMs = currentMillis;
@@ -354,55 +360,6 @@ void loop() {
         attachInterrupt(digitalPinToInterrupt(limitSwitchHighPin), StepperLimit, CHANGE);
         interruptAttached = true;
     }
-}
-
-double measureMagnetometerSpeed() {
-    if (!as5600Available) {
-        magnetometerSpeed = 0.0;
-        return magnetometerSpeed;
-    }
-
-    static unsigned long prevAs5600Micros = 0;
-    const unsigned long sampleUs = 20000; // 20 ms fixed update for stable speed estimate
-    const float maxAllowedRevPerSec = 3.0f; // reject unrealistic AS5600 spikes
-
-    unsigned long nowUs = micros();
-    if (prevAs5600Micros == 0) {
-        prevAs5600Micros = nowUs;
-        prevAs5600Angle = as5600.getAngle();
-        return magnetometerSpeed;
-    }
-
-    unsigned long dtUs = nowUs - prevAs5600Micros;
-    if (dtUs < sampleUs) {
-        return magnetometerSpeed;
-    }
-
-    uint16_t angleNow = as5600.getAngle(); // 0..4095
-    int16_t delta = (int16_t)angleNow - (int16_t)prevAs5600Angle;
-
-    if (delta > 2048) delta -= 4096;
-    if (delta < -2048) delta += 4096;
-
-    float dt = (float)dtUs / 1000000.0f;
-
-    float maxDeltaCounts = maxAllowedRevPerSec * 4096.0f * dt;
-    if (fabs((float)delta) > maxDeltaCounts) {
-        prevAs5600Angle = angleNow;
-        prevAs5600Micros = nowUs;
-        return magnetometerSpeed;
-    }
-
-    float revPerSec = ((float)delta / 4096.0f) / dt;
-    float rawSpeed = fabs(revPerSec * (2.0f * PI * rollerRadius));
-
-    magnetometerSpeed += SpeedFilterAlpha * (rawSpeed - magnetometerSpeed);
-
-    prevAs5600Angle = angleNow;
-    prevAs5600Micros = nowUs;
-    prevAs5600Time = millis();
-
-    return magnetometerSpeed;
 }
 
 /// @brief Print diagnostic information to the serial monitor at a specified interval
@@ -430,21 +387,19 @@ void diagnose(unsigned long interval) {
         // These four for PID plotting in the serial plotter
         */
         /* Serial.print("speed_target:");
-        Serial.print(targetSpeed * 1000.0f);
-        Serial.print(",measured_speed:");
+        Serial.print(targetSpeed * 1000.0f); */
+        Serial.print("measured_speed: ");
         Serial.print(speed * 1000.0f);
-        Serial.print(",distance mm:");
-        Serial.print(traveledDistance * 1000.0f, 2);
-        Serial.print(",fan_rpm:");
+        /* Serial.print(",distance mm:");
+        Serial.print(traveledDistance * 1000.0f, 2); */
+        Serial.print(",fan_rpm: ");
         Serial.print(fanRpm, 0);
-        Serial.print(",fan_duty:");
+    /*     Serial.print(",fan_duty:");
         Serial.print(fanDutyPercent);
         Serial.print(",load_state:");
         Serial.print((int)loadState);
         Serial.print(",tmc_mA:");
         Serial.print(guideDriverCurrentmA); */
-        //Serial.print(",mag_speed:");
-        //Serial.print(magnetometerSpeed * 1000.0f);
         /* Serial.print(",target_current:");
         Serial.print(SetTorqueCurrent);
         Serial.print(",measured_current:");
@@ -455,14 +410,20 @@ void diagnose(unsigned long interval) {
         Serial.print(digitalRead(limitSwitchLowPin)); */
         /* Serial.print(",stpr pos: ");
         Serial.print(guidePosition);
-        Serial.print(", Stp Dir: ");
-        Serial.print(stepDirection);
+        Serial.print(", To max: ");
+        Serial.print((int)guideMovingTowardMax);
         Serial.print(", Step speed: ");
         Serial.print(stepperSpeed); */
-        Serial.print("guide position: ");
-        Serial.print(guidePosition);
-
-        Serial.println(); // Newline for serial plotter
+        Serial.print(",guide position cm: ");
+        Serial.println(guidePosition * 100.0, 4);
+        /* Serial.print(", tmc_mA:");
+        Serial.print(guideDriverCurrentmA);
+        Serial.print(", otpw:");
+        Serial.print((int)guideDriverOtpw);
+        Serial.print(", ot:");
+        Serial.print((int)guideDriverOt);
+        Serial.print(", drv_status:0x");
+        Serial.println(); // Newline for serial plotter */
     }
 }
 
@@ -492,16 +453,6 @@ void motorControl(float setSpeed, float actualSpeed) {
 void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
     (void)microsCurrent;
 
-    if (lastStepperCtrlUs == 0) {
-        lastStepperCtrlUs = micros();
-    }
-
-    unsigned long nowUs = micros();
-    double dt = (double)(nowUs - lastStepperCtrlUs) / 1000000.0;
-    if (dt < 0.0) dt = 0.0;
-    if (dt > 0.05) dt = 0.05;
-    lastStepperCtrlUs = nowUs;
-
     syncGuidePositionFromStepper();
 
     // Smooth noisy filament speed to reduce audible jitter.
@@ -514,58 +465,55 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
         desiredStepperSpeed = guideOmega / (2.0 * PI) * stepsPerRevolution;
     }
 
-    // Apply slew-rate limit so step frequency changes smoothly.
-    double maxDelta = STEPPER_ACCEL_LIMIT_STEPS_S2 * dt;
-    double speedError = desiredStepperSpeed - commandedStepperSpeed;
-    if (speedError > maxDelta) speedError = maxDelta;
-    if (speedError < -maxDelta) speedError = -maxDelta;
-    commandedStepperSpeed += speedError;
-
-    stepperSpeed = commandedStepperSpeed;
-    if (stepperSpeed <= 0.0) {
-        guideStepper.setSpeed(0.0);
-        guideStepper.runSpeed();
+    double commandedAbsSpeed = fabs(desiredStepperSpeed);
+    if (commandedAbsSpeed <= 0.0) {
+        guideStepper->stopMove();
+        stepperSpeed = 0.0;
+        syncGuidePositionFromStepper();
         return;
     }
 
-  // Count one layer when reaching max while moving forward, then reverse.
-  if (guidePosition >= guideMaxPosition && stepDirection == HIGH) {
-    guidePosition = guideMaxPosition;
-    layerNumber++;
-    stepDirection = LOW;
-        long clampedSteps = (long)(guidePosition * stepsPerRevolution / leadScrewPitch);
-        guideStepper.setCurrentPosition(clampedSteps);
-        lastStepperPosSteps = clampedSteps;
-  }
+    uint32_t commandedHz = (uint32_t)constrain(commandedAbsSpeed, 0.0, (double)STEPPER_MAX_SPEED_STEPS_S);
+    guideStepper->setAcceleration((uint32_t)STEPPER_ACCEL_LIBRARY_STEPS_S2);
+    guideStepper->setSpeedInHz(commandedHz);
 
-  // Count one layer when reaching zero while moving backward, then reverse.
-  if (guidePosition <= 0.0 && stepDirection == LOW) {
-    guidePosition = 0.0;
-    layerNumber++;
-    stepDirection = HIGH;
-        guideStepper.setCurrentPosition(0);
-        lastStepperPosSteps = 0;
-  }
+    // Standalone-style control: run to endpoint target, then flip endpoint.
+    if (!guideStepper->isRunning()) {
+        layerNumber++;
 
-        double signedStepSpeed = (stepDirection == HIGH) ? -stepperSpeed : stepperSpeed;
-        guideStepper.setSpeed(signedStepSpeed);
-        guideStepper.runSpeed();
-        syncGuidePositionFromStepper();
+        long currentPos = (long)guideStepper->getCurrentPosition();
+        if (currentPos <= 1) {
+            // At/near home -> always go away from limit switch.
+            guideStepper->moveTo((int32_t)guideMaxPositionSteps);
+            guideMovingTowardMax = false;
+        } else if (currentPos >= (guideMaxPositionSteps - 1)) {
+            // At/near max -> go back toward home.
+            guideStepper->moveTo(0);
+            guideMovingTowardMax = true;
+        } else if (guideMovingTowardMax) {
+            guideStepper->moveTo((int32_t)guideMaxPositionSteps);
+            guideMovingTowardMax = false;
+        } else {
+            guideStepper->moveTo(0);
+            guideMovingTowardMax = true;
+        }
+    }
+
+    stepperSpeed = (double)commandedHz;
+    syncGuidePositionFromStepper();
 }
 
 void enterLoadMode() {
     loadState = LOAD_HOMING;
     setGuideDriverCurrent(GUIDE_TMC_RUN_CURRENT_MA);
 
-    stepDirection = LOAD_HOME_DIRECTION; // drive guide toward low/home end
+    guideMovingTowardMax = false; // drive guide toward low/home end
     digitalWrite(stepPin, LOW);
     microsPrevStep = micros();
-    guideStepper.setAcceleration(LOAD_HOME_ACCEL_LIBRARY_STEPS_S2);
-    guideStepper.setMaxSpeed(LOAD_HOME_CONSTANT_SPEED_STEPS_S);
-
-    // Relative target guarantees a fresh homing move every time load mode is entered.
-    long homingDelta = (stepDirection == HIGH) ? -LOAD_HOME_TARGET_STEPS : LOAD_HOME_TARGET_STEPS;
-    guideStepper.move(homingDelta);
+    guideStepper->setAcceleration((uint32_t)LOAD_HOME_ACCEL_LIBRARY_STEPS_S2);
+    guideStepper->setSpeedInHz((uint32_t)LOAD_HOME_CONSTANT_SPEED_STEPS_S);
+    // Constant-speed homing like standalone behavior: run until limit switch triggers.
+    guideStepper->runForward();
     analogWrite(motorRollerPin, 0);
     analogWrite(motorSpoolPin, 0);
 }
@@ -578,10 +526,14 @@ void exitLoadMode() {
     traveledDistance = 0.0;
     guidePosition = 0.0;
     layerNumber = 0;
-    stepDirection = HIGH; // move away from home/low limit when normal mode resumes
-    digitalWrite(dirPin, stepDirection);
-    guideStepper.setAcceleration(STEPPER_ACCEL_LIBRARY_STEPS_S2);
-    guideStepper.moveTo(guideStepper.currentPosition());
+    // Resume normal mode by moving away from the low/home limit first.
+    guideMovingTowardMax = false;
+    guideStepper->setAcceleration((uint32_t)STEPPER_ACCEL_LIBRARY_STEPS_S2);
+    guideStepper->stopMove();
+    guideStepper->forceStopAndNewPosition(0);
+    guideStepper->moveTo((int32_t)guideMaxPositionSteps);
+    lastStepperPosSteps = 0;
+    stepperSpeed = 0.0;
 
     digitalWrite(stepPin, LOW);
     analogWrite(motorRollerPin, 0);
@@ -596,29 +548,17 @@ void updateLoadMode(unsigned long microsCurrent) {
             RollerPID.setSetpoint(targetSpeed);
             analogWrite(motorRollerPin, RollerPID.compute(speed)); // pulley keeps PID control
 
-            // Let AccelStepper handle acceleration profile in homing mode.
-            int burst = LOAD_HOME_RUN_BURST;
-            while (burst-- > 0) {
-                if (!guideStepper.run()) {
-                    break;
-                }
-            }
+            // Constant-speed homing to the low/home switch.
             syncGuidePositionFromStepper();
-            stepperSpeed = fabs(guideStepper.speed());
-
-            // Re-arm if a target was exhausted before switch is reached.
-            if (guideStepper.distanceToGo() == 0) {
-                long homingDelta = (stepDirection == HIGH) ? -LOAD_HOME_TARGET_STEPS : LOAD_HOME_TARGET_STEPS;
-                guideStepper.move(homingDelta);
-            }
+            stepperSpeed = LOAD_HOME_CONSTANT_SPEED_STEPS_S;
 
             // Stop when low/home limit is reached.
             if (digitalRead(limitSwitchLowPin) == HIGH) {
                 guidePosition = 0.0;
                 digitalWrite(stepPin, LOW);
-                guideStepper.setSpeed(0.0);
-                guideStepper.setCurrentPosition(0);
-                guideStepper.moveTo(0);
+                guideStepper->stopMove();
+                guideStepper->forceStopAndNewPosition(0);
+                guideStepper->moveTo(0);
                 lastStepperPosSteps = 0;
                 stepperSpeed = 0.0;
                 loadState = LOAD_WAIT_PHASE;
@@ -656,10 +596,10 @@ void initGuideTmcUart() {
     uint8_t conn = guideDriver.test_connection();
     guideDriverUartReady = (conn == 0);
 
-    Serial.print("Guide TMC2208 UART test_connection() = ");
+    Serial.print("Guide tmc2209 UART test_connection() = ");
     Serial.println(conn);
     if (!guideDriverUartReady) {
-        Serial.println("WARN: Guide TMC2208 UART not responding. Current/microstep commands may be ignored.");
+        Serial.println("WARN: Guide tmc2209 UART not responding. Current/microstep commands may be ignored.");
     }
 }
 
@@ -676,8 +616,36 @@ void setGuideDriverCurrent(uint16_t currentmA) {
     guideDriver.rms_current(currentmA);
 }
 
+void updateGuideDriverStatus() {
+    if (!guideDriverUartReady) {
+        return;
+    }
+
+    uint32_t status = guideDriver.DRV_STATUS();
+    guideDriverStatusRaw = status;
+
+    bool prevOtpw = guideDriverOtpw;
+    bool prevOt = guideDriverOt;
+
+    // tmc2209 DRV_STATUS bits: OTPW=26, OT=25
+    guideDriverOtpw = ((status >> 26) & 0x1U) != 0U;
+    guideDriverOt = ((status >> 25) & 0x1U) != 0U;
+
+    if (guideDriverOt && !prevOt) {
+        Serial.println("tmc2209 OT active: thermal shutdown.");
+    } else if (guideDriverOtpw && !prevOtpw) {
+        Serial.println("tmc2209 OTPW active: near thermal shutdown.");
+    }
+
+    // Telemetry only: no automatic derating or motion intervention here.
+}
+
 void syncGuidePositionFromStepper() {
-    long currentPosSteps = guideStepper.currentPosition();
+    if (guideStepper == nullptr) {
+        return;
+    }
+
+    long currentPosSteps = (long)guideStepper->getCurrentPosition();
     long deltaSteps = currentPosSteps - lastStepperPosSteps;
     if (deltaSteps != 0) {
         guidePosition += ((double)deltaSteps) * (leadScrewPitch / stepsPerRevolution);
@@ -690,30 +658,78 @@ void IRAM_ATTR StepperLimit(){
 }
 
 void initPCNT() {
-    pcnt_config_t pcnt_config = {
-        .pulse_gpio_num = encoderPinA,
-        .ctrl_gpio_num = encoderPinB,
-        .lctrl_mode = PCNT_MODE_REVERSE,
-        .hctrl_mode = PCNT_MODE_KEEP,
-        .pos_mode = PCNT_COUNT_INC,
-        .neg_mode = PCNT_COUNT_INC,
-        .counter_h_lim = PCNT_H_LIM,
-        .counter_l_lim = -PCNT_H_LIM,
-        .unit = PCNT_UNIT_USED,
-        .channel = PCNT_CHANNEL_0,
-    };
+    encoderPcntReady = false;
 
-    pcnt_unit_config(&pcnt_config);
-    pcnt_counter_pause(PCNT_UNIT_USED);
-    pcnt_counter_clear(PCNT_UNIT_USED);
-    pcnt_counter_resume(PCNT_UNIT_USED);
+    pcnt_unit_config_t encoderUnitConfig = {
+        .low_limit = -PCNT_H_LIM,
+        .high_limit = PCNT_H_LIM,
+    };
+    esp_err_t err = pcnt_new_unit(&encoderUnitConfig, &encoderPcntUnit);
+    if (err != ESP_OK) {
+        Serial.printf("ERROR: encoder pcnt_new_unit failed (%d)\n", (int)err);
+        return;
+    }
+
+    pcnt_chan_config_t encoderChanConfig = {
+        .edge_gpio_num = encoderPinA,
+        .level_gpio_num = encoderPinB,
+    };
+    err = pcnt_new_channel(encoderPcntUnit, &encoderChanConfig, &encoderPcntChannel);
+    if (err != ESP_OK) {
+        Serial.printf("ERROR: encoder pcnt_new_channel failed (%d)\n", (int)err);
+        return;
+    }
+
+    err = pcnt_channel_set_edge_action(
+        encoderPcntChannel,
+        PCNT_CHANNEL_EDGE_ACTION_INCREASE,
+        PCNT_CHANNEL_EDGE_ACTION_INCREASE
+    );
+    if (err != ESP_OK) {
+        Serial.printf("ERROR: encoder pcnt_channel_set_edge_action failed (%d)\n", (int)err);
+        return;
+    }
+
+    err = pcnt_channel_set_level_action(
+        encoderPcntChannel,
+        PCNT_CHANNEL_LEVEL_ACTION_INVERSE,
+        PCNT_CHANNEL_LEVEL_ACTION_KEEP
+    );
+    if (err != ESP_OK) {
+        Serial.printf("ERROR: encoder pcnt_channel_set_level_action failed (%d)\n", (int)err);
+        return;
+    }
+
+    err = pcnt_unit_enable(encoderPcntUnit);
+    if (err != ESP_OK) {
+        Serial.printf("ERROR: encoder pcnt_unit_enable failed (%d)\n", (int)err);
+        return;
+    }
+    err = pcnt_unit_clear_count(encoderPcntUnit);
+    if (err != ESP_OK) {
+        Serial.printf("ERROR: encoder pcnt_unit_clear_count failed (%d)\n", (int)err);
+        return;
+    }
+    err = pcnt_unit_start(encoderPcntUnit);
+    if (err != ESP_OK) {
+        Serial.printf("ERROR: encoder pcnt_unit_start failed (%d)\n", (int)err);
+        return;
+    }
+
+    encoderPcntReady = true;
 }
 
 void pollPcntPulseEvent() {
-    int16_t pcntCount = 0;
-    pcnt_get_counter_value(PCNT_UNIT_USED, &pcntCount);
+    if (!encoderPcntReady) {
+        return;
+    }
 
-    int16_t countDelta = pcntCount - prevPcntCount;
+    int pcntCount = 0;
+    if (pcnt_unit_get_count(encoderPcntUnit, &pcntCount) != ESP_OK) {
+        return;
+    }
+
+    int countDelta = pcntCount - prevPcntCount;
     if (countDelta != 0) {
         encoderPulseEvent = true;
         prevPcntCount = pcntCount;
@@ -728,38 +744,87 @@ void setFanDutyPercent(uint8_t percent) {
 }
 
 void initFanControlAndTach() {
+    fanPcntReady = false;
+
     // ESP32 Arduino Core v3 LEDC API
     ledcAttach(fanControlPin, 25000, 8);
     setFanDutyPercent(fanDutyPercent);
 
     pinMode(fanRSpeedPin, INPUT_PULLUP);
 
-    pcnt_config_t fanPcntConfig = {
-        .pulse_gpio_num = fanRSpeedPin,
-        .ctrl_gpio_num = PCNT_PIN_NOT_USED,
-        .lctrl_mode = PCNT_MODE_KEEP,
-        .hctrl_mode = PCNT_MODE_KEEP,
-        .pos_mode = PCNT_COUNT_INC,
-        .neg_mode = PCNT_COUNT_DIS,
-        .counter_h_lim = PCNT_H_LIM,
-        .counter_l_lim = 0,
-        .unit = FAN_PCNT_UNIT,
-        .channel = PCNT_CHANNEL_0,
+    pcnt_unit_config_t fanUnitConfig = {
+        .low_limit = -PCNT_H_LIM,
+        .high_limit = PCNT_H_LIM,
     };
+    esp_err_t err = pcnt_new_unit(&fanUnitConfig, &fanPcntUnit);
+    if (err != ESP_OK) {
+        Serial.printf("WARN: fan pcnt_new_unit failed (%d), fan RPM disabled\n", (int)err);
+        return;
+    }
 
-    pcnt_unit_config(&fanPcntConfig);
-    // Approx. 5 us digital glitch filter at 80 MHz APB clock -> 5e-6 * 80e6 = 400
-    pcnt_set_filter_value(FAN_PCNT_UNIT, 400);
-    pcnt_filter_enable(FAN_PCNT_UNIT);
-    pcnt_counter_pause(FAN_PCNT_UNIT);
-    pcnt_counter_clear(FAN_PCNT_UNIT);
-    pcnt_counter_resume(FAN_PCNT_UNIT);
+    pcnt_chan_config_t fanChanConfig = {
+        .edge_gpio_num = fanRSpeedPin,
+        .level_gpio_num = -1,
+    };
+    err = pcnt_new_channel(fanPcntUnit, &fanChanConfig, &fanPcntChannel);
+    if (err != ESP_OK) {
+        Serial.printf("WARN: fan pcnt_new_channel failed (%d), fan RPM disabled\n", (int)err);
+        return;
+    }
+
+    err = pcnt_channel_set_edge_action(
+        fanPcntChannel,
+        PCNT_CHANNEL_EDGE_ACTION_INCREASE,
+        PCNT_CHANNEL_EDGE_ACTION_HOLD
+    );
+    if (err != ESP_OK) {
+        Serial.printf("WARN: fan pcnt_channel_set_edge_action failed (%d), fan RPM disabled\n", (int)err);
+        return;
+    }
+
+    pcnt_glitch_filter_config_t fanFilterConfig = {
+        .max_glitch_ns = 5000,
+    };
+    err = pcnt_unit_set_glitch_filter(fanPcntUnit, &fanFilterConfig);
+    if (err != ESP_OK) {
+        Serial.printf("WARN: fan pcnt_unit_set_glitch_filter failed (%d), fan RPM disabled\n", (int)err);
+        return;
+    }
+
+    err = pcnt_unit_enable(fanPcntUnit);
+    if (err != ESP_OK) {
+        Serial.printf("WARN: fan pcnt_unit_enable failed (%d), fan RPM disabled\n", (int)err);
+        return;
+    }
+    err = pcnt_unit_clear_count(fanPcntUnit);
+    if (err != ESP_OK) {
+        Serial.printf("WARN: fan pcnt_unit_clear_count failed (%d), fan RPM disabled\n", (int)err);
+        return;
+    }
+    err = pcnt_unit_start(fanPcntUnit);
+    if (err != ESP_OK) {
+        Serial.printf("WARN: fan pcnt_unit_start failed (%d), fan RPM disabled\n", (int)err);
+        return;
+    }
+
+    fanPcntReady = true;
 }
 
 void updateFanRpm() {
-    int16_t pulseCount = 0;
-    pcnt_get_counter_value(FAN_PCNT_UNIT, &pulseCount);
-    pcnt_counter_clear(FAN_PCNT_UNIT);
+    if (!fanPcntReady) {
+        fanRpm = 0.0;
+        return;
+    }
+
+    int pulseCount = 0;
+    if (pcnt_unit_get_count(fanPcntUnit, &pulseCount) != ESP_OK) {
+        fanRpm = 0.0;
+        return;
+    }
+    if (pcnt_unit_clear_count(fanPcntUnit) != ESP_OK) {
+        fanRpm = 0.0;
+        return;
+    }
 
     fanRpm = ((float)pulseCount * 60.0f) / 2.0f; // 2 pulses/rev fan tach
 }
@@ -775,18 +840,6 @@ void initI2CPeripherals() {
     }
   }
 
-    as5600Available = as5600.begin();
-    if (as5600Available) {
-        prevAs5600Angle = as5600.getAngle();
-        prevAs5600Time = millis();
-        if (!as5600InitPrinted) {
-            Serial.println("AS5600 initialized.");
-            as5600InitPrinted = true;
-        }
-    } else if (!as5600InitPrinted) {
-        Serial.println("AS5600 not found, mag speed disabled.");
-        as5600InitPrinted = true;
-    }
 }
 
 /// @brief Set pin modes for stepper control, limit switch, and motor control pins.
@@ -828,8 +881,16 @@ void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
     float calib_spool_sum = 0.0;
     int calib_spool_samples = 0;
 
-    stepDirection = LOW; // Set initial direction towards the limit switch
-    digitalWrite(dirPin, stepDirection); // Set direction towards the limit switch
+    bool calMovingTowardHome = true;
+    auto setCalDirection = [&](bool towardHome) {
+        uint8_t dirLevel = towardHome ? LOW : HIGH;
+        if (GUIDE_DIR_PIN_INVERTED) {
+            dirLevel = (dirLevel == HIGH) ? LOW : HIGH;
+        }
+        digitalWrite(dirPin, dirLevel);
+    };
+
+    setCalDirection(calMovingTowardHome); // Set initial direction towards the limit switch
     analogWrite(motorSpoolPin, DAC_maxValue); // Run spool at full speed for calibration
 
     while (!calibrated || !homed) {
@@ -862,8 +923,8 @@ void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
             else {
                 homed = true; // Limit switch triggered, homing complete
                 Serial.println("Homing complete.");
-                stepDirection = !stepDirection; 
-                digitalWrite(dirPin, stepDirection); // Set direction for normal operation
+                calMovingTowardHome = false;
+                setCalDirection(calMovingTowardHome); // Set direction for normal operation
             }
         }
         microsPrevStep = microsCurrent;
@@ -925,10 +986,12 @@ void updateDistance() {
     lastDistanceUpdateMs = nowMs;
 }
 
-/// @brief Update current measurements from INA219 sensors and apply a low-pass filter to smooth the readings.
-void updateMeasurements() {
-    float currentSpool = ina219_spool.getCurrent_mA();
-    SpoolMotorCurrent += CurrentfilterAlpha*(currentSpool - SpoolMotorCurrent); // Simple low-pass filter to smooth current measurement for spool motor
+/// @brief Update speed/current measurements. In load mode, only speed decay is maintained.
+void updateMeasurements(bool sampleCurrent) {
+    if (sampleCurrent) {
+        float currentSpool = ina219_spool.getCurrent_mA();
+        SpoolMotorCurrent += CurrentfilterAlpha*(currentSpool - SpoolMotorCurrent); // Simple low-pass filter to smooth current measurement for spool motor
+    }
     //updateSpeedEstimate();
     //TEST this:
     decaySpeed(); // Decay speed estimate if no pulses received, should be called regularly in loop
@@ -1030,50 +1093,3 @@ void parseSerialSetpoints(char* input) {
 
     Serial.println("Invalid command. Use help, S=20, C=50, F=40, 20,50 or 20,50,40");
 }
-
-// Encoder pulse events are sourced from PCNT polling in pollPcntPulseEvent().
-
-/* Based on Oleg Mazurov's code for rotary encoder interrupt service routines for AVR micros
-   here https://chome.nerpa.tech/mcu/reading-rotary-encoder-on-arduino/
-   and using interrupts https://chome.nerpa.tech/mcu/rotary-encoder-interrupt-service-routine-for-avr-micros/
-
-   This example does not use the port read method. Tested with Nano and ESP32
-   both encoder A and B pins must be connected to interrupt enabled pins, see here for more info:
-   https://www.arduino.cc/reference/en/language/functions/external-interrupts/attachinterrupt/
-
-void read_encoder() {
-  // Encoder interrupt routine for both pins. Updates counter
-  // if they are valid and have rotated a full indent
- 
-  static uint8_t old_AB = 3;  // Lookup table index
-  static int8_t encval = 0;   // Encoder value  
-  static const int8_t enc_states[]  = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0}; // Lookup table
-
-  old_AB <<=2;  // Remember previous state
-
-  if (digitalRead(ENC_A)) old_AB |= 0x02; // Add current state of pin A
-  if (digitalRead(ENC_B)) old_AB |= 0x01; // Add current state of pin B
-  
-  encval += enc_states[( old_AB & 0x0f )];
-
-  // Update counter if encoder has rotated a full indent, that is at least 4 steps
-  if( encval > 3 ) {        // Four steps forward
-    int changevalue = 1;
-    if((micros() - _lastIncReadTime) < _pauseLength) {
-      changevalue = _fastIncrement * changevalue; 
-    }
-    _lastIncReadTime = micros();
-    counter = counter + changevalue;              // Update counter
-    encval = 0;
-  }
-  else if( encval < -3 ) {        // Four steps backward
-    int changevalue = -1;
-    if((micros() - _lastDecReadTime) < _pauseLength) {
-      changevalue = _fastIncrement * changevalue; 
-    }
-    _lastDecReadTime = micros();
-    counter = counter + changevalue;              // Update counter
-    encval = 0;
-  }
-} 
-  */
