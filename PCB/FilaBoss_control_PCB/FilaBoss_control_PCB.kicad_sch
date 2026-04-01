@@ -6093,6 +6093,12 @@
 		(uuid "015dbcf9-e91a-4778-b6d8-7e171c338e94")
 	)
 	(junction
+		(at 119.38 125.73)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "0ead9296-03d1-45d0-aca9-98c8eca504bc")
+	)
+	(junction
 		(at 68.58 149.86)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -6668,6 +6674,16 @@
 	)
 	(wire
 		(pts
+			(xy 119.38 127) (xy 119.38 125.73)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4723fc81-1983-4119-ba12-b9ef2f63b4f9")
+	)
+	(wire
+		(pts
 			(xy 101.6 67.31) (xy 101.6 71.12)
 		)
 		(stroke
@@ -6975,6 +6991,16 @@
 			(type default)
 		)
 		(uuid "7aa7f06f-822b-4367-ba74-334cb1874080")
+	)
+	(wire
+		(pts
+			(xy 119.38 125.73) (xy 142.24 125.73)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7c624102-62c7-49f7-9436-f5a0a6bd6444")
 	)
 	(wire
 		(pts
@@ -7718,16 +7744,6 @@
 	)
 	(wire
 		(pts
-			(xy 111.76 125.73) (xy 115.57 125.73)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "faf9d580-19ef-4b5c-9879-54e8e14da0cb")
-	)
-	(wire
-		(pts
 			(xy 232.41 109.22) (xy 194.31 109.22)
 		)
 		(stroke
@@ -7745,16 +7761,6 @@
 			(type default)
 		)
 		(uuid "fd4075b7-2d69-4fbb-9c21-5a906a7f179f")
-	)
-	(wire
-		(pts
-			(xy 123.19 125.73) (xy 142.24 125.73)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "fee38fa9-55f5-4300-91ef-cf45f93f3c0f")
 	)
 	(symbol
 		(lib_id "power:+12V")
@@ -11672,7 +11678,7 @@
 			)
 		)
 		(property "Value" "GND"
-			(at 97.79 133.35 90)
+			(at 102.87 130.81 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12835,72 +12841,6 @@
 		)
 	)
 	(symbol
-		(lib_id "power:+3.3V")
-		(at 111.76 134.62 0)
-		(mirror x)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "a30d4aae-b79d-4184-9cb5-800e54fdaf30")
-		(property "Reference" "#PWR054"
-			(at 111.76 130.81 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Value" "+3.3V"
-			(at 111.76 138.43 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 111.76 134.62 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" ""
-			(at 111.76 134.62 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Power symbol creates a global label with name \"+3.3V\""
-			(at 111.76 134.62 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "3c185998-e5a1-44aa-a5ec-502752e1df1a")
-		)
-		(instances
-			(project "FilaBoss_control_PCB"
-				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
-					(reference "#PWR054")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "Connector:Conn_01x03_Pin")
 		(at 107.95 99.06 0)
 		(mirror x)
@@ -13540,6 +13480,71 @@
 		)
 	)
 	(symbol
+		(lib_id "power:+5V")
+		(at 111.76 134.62 180)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "b667809a-3163-4f4b-b3cd-f818d5e38e4d")
+		(property "Reference" "#PWR054"
+			(at 111.76 130.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "+5V"
+			(at 111.76 138.43 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 111.76 134.62 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 111.76 134.62 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"+5V\""
+			(at 111.76 134.62 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "067b6d8a-74dc-4b0c-a557-84ece7c6da74")
+		)
+		(instances
+			(project "FilaBoss_control_PCB"
+				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
+					(reference "#PWR054")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "power:+12V")
 		(at 77.47 35.56 270)
 		(unit 1)
@@ -14073,7 +14078,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 119.38 125.73 90)
+		(at 115.57 125.73 90)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -14081,7 +14086,7 @@
 		(dnp no)
 		(uuid "cf072fb9-5ff0-4caa-acdf-8f7ef59a572a")
 		(property "Reference" "R19"
-			(at 121.92 124.46 90)
+			(at 118.11 124.46 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14089,8 +14094,8 @@
 				(justify right)
 			)
 		)
-		(property "Value" "330R"
-			(at 116.84 125.73 90)
+		(property "Value" "1k"
+			(at 114.3 125.73 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14099,7 +14104,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
-			(at 119.38 127.508 90)
+			(at 115.57 127.508 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14108,7 +14113,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 119.38 125.73 0)
+			(at 115.57 125.73 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14117,7 +14122,7 @@
 			)
 		)
 		(property "Description" "Resistor"
-			(at 119.38 125.73 0)
+			(at 115.57 125.73 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14276,6 +14281,75 @@
 			(project "FilaBoss_control_PCB"
 				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
 					(reference "#PWR01")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 119.38 130.81 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "d5d872b2-df34-40ed-aaeb-e2753bf3043f")
+		(property "Reference" "R20"
+			(at 121.92 129.54 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Value" "2k"
+			(at 119.38 129.54 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+			)
+		)
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
+			(at 117.602 130.81 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 119.38 130.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 119.38 130.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "2"
+			(uuid "83b4f5a8-a193-4772-8840-9a28c74090b3")
+		)
+		(pin "1"
+			(uuid "85ed8e56-be47-4def-af19-f3316ec4f0a2")
+		)
+		(instances
+			(project "FilaBoss_control_PCB"
+				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
+					(reference "R20")
 					(unit 1)
 				)
 			)
@@ -15753,6 +15827,71 @@
 			(project ""
 				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
 					(reference "#PWR02")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 119.38 134.62 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "f99803fa-2e2d-419c-a8d4-caf937d084f6")
+		(property "Reference" "#PWR055"
+			(at 119.38 140.97 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 119.38 138.43 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 119.38 134.62 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 119.38 134.62 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 119.38 134.62 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "220c69f6-7bc2-457e-b305-6376a7c13ccb")
+		)
+		(instances
+			(project "FilaBoss_control_PCB"
+				(path "/2f49582a-29fd-468d-b48c-a2b14259075d"
+					(reference "#PWR055")
 					(unit 1)
 				)
 			)
