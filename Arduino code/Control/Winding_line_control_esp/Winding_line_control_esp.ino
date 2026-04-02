@@ -116,6 +116,10 @@ const bool GUIDE_DIR_PIN_INVERTED = true;
 // Stepper timing variables
 bool guideMovingTowardMax = false;
 
+// Wait for load phase on reset
+bool waitingForLoad = true;
+bool extruderPauseActive = false;
+
 double speed = 0.0; //m/s, current speed of the filament, calculated from encoder counts
 double traveledDistance = 0.0;    // m, total distance traveled by the filament, calculated by integrating speed over time
 
@@ -230,6 +234,37 @@ void setup() {
 }
 
 void loop() {
+    if (waitingForLoad) {
+        Serial.println("Initializing complete. Waiting for load switch activation to start normal operation...");
+    }
+
+    while (waitingForLoad) {
+        if (digitalRead(switchLoadPin) == LOW) {
+            waitingForLoad = false;
+        }
+        delay(1);
+    }
+
+    bool extruderLow = (digitalRead(extruderSrewPin) == LOW);
+    if (extruderLow) {
+        if (!extruderPauseActive) {
+            extruderPauseActive = true;
+            Serial.println("Extruder input low. Pausing control until it returns high.");
+            analogWrite(motorRollerPin, 0);
+            analogWrite(motorSpoolPin, 0);
+            if (guideStepper != nullptr) {
+                guideStepper->stopMove();
+            }
+        }
+        delay(1);
+        return;
+    }
+
+    if (extruderPauseActive) {
+        extruderPauseActive = false;
+        Serial.println("Extruder input high. Resuming control.");
+    }
+
     unsigned long currentMillis = millis();
     unsigned long microsCurrent = micros();
     bool loadSwitchActive = (digitalRead(switchLoadPin) == LOW); // active-low switch: ON -> GND
@@ -519,7 +554,7 @@ void initGuideStepper() {
     guideMaxPositionSteps = -(long)(guideMaxPosition * stepsPerRevolution / leadScrewPitch + 0.5);
     guideInitialPosSteps = -(long)(guideInitialPosition * stepsPerRevolution / leadScrewPitch + 0.5);
 
-    // Home the guide against the low limit switch before normal operation starts.
+/*     // Home the guide against the low limit switch before normal operation starts.
     guideMovingTowardMax = false;
     if (digitalRead(limitSwitchLowPin) != HIGH) {
         guideStepper->runForward();
@@ -540,7 +575,7 @@ void initGuideStepper() {
 
     lastStepperPosSteps = 0;
     guidePosition = 0.0;
-    layerNumber = 0;
+    layerNumber = 0; */
 
 }
 
@@ -779,6 +814,7 @@ void pinSetup() {
 
     pinMode(motorRollerPin, OUTPUT);
     pinMode(motorSpoolPin, OUTPUT);
+    pinMode(extruderSrewPin, INPUT);
 
     pinMode (encoderPinA, INPUT);
     pinMode (encoderPinB, INPUT);
