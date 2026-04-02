@@ -23,9 +23,9 @@ const static float ADC_maxValue = pow(2, ADC_bits) - 1; // 4095 for 12-bit ADC
 const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 
 // ESP32 pin setup (ESP-WROOM-32 + CP2102 dev board)
-#define motorRollerPin 25 //***
-#define motorSpoolPin 26 //***
-#define stepPin 2 //***
+#define motorRollerPin 12 //***
+#define motorSpoolPin 13 //***
+#define stepPin 4 //***
 #define dirPin 15 //***
 #define limitSwitchLowPin 35      // Normally LOW //***
 #define limitSwitchHighPin 34     // Normally HIGH //***
@@ -38,11 +38,12 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 #define extruderSrewPin 23 // Extruder screw //this needs to be tested
 #define led1Pin 19 // Led 1 //*** 
 #define led2Pin 18 // Led 2 //*** 
-#define led3Pin 4 // Led 3 //***
+#define raspberryPiRXPIn 25 // UART RX pin for Raspberry Pi communication (if needed) //***
+#define raspberryPiTXPin 26 // UART TX pin for Raspberry Pi communication (if needed) //***
 
 // TMC2209 UART configuration for guide stepper drivers
-#define tmcRx1Pin 5
-#define tmcTx1Pin 13
+#define tmcRx1Pin 16
+#define tmcTx1Pin 17
 #define tmcBaud 115200
 
 #define stepsPerRev 200.0 // full steps per revolution (NEMA17)
@@ -56,7 +57,7 @@ const float GUIDE_TMC_R_SENSE = 0.11f;
 #define leadScrewPitch 0.004 //m per revolution (4 mm pitch)
 #define ApproachStepInterval 1000.0 // microseconds between steps
 
-#define guideMaxPosition 0.05 //m, 5 cm guide travel like standalone test
+#define guideMaxPosition 0.03 //m, 5 cm guide travel like standalone test
 #define spoolRadius 0.053 //m, start radius of the filament spool
 #define filamentDiameter 0.00285 //m, diameter of the filament
 #define spoolWidth 0.045 //m, width of the filament spool
@@ -103,14 +104,14 @@ volatile double guidePosition = 0.0; //m, current position of the filament guide
 volatile int layerNumber = 0; //current layer number, used for testing
 
 //Test parameters   
-float targetSpeed = 0.02; //m/s, desired filament speed
+float targetSpeed = 0.01; //m/s, desired filament speed
 double SetTorqueCurrent = 50; //mA, example torque setpoint for testing
 
 // Calibration variables
 float noLoadCurrent_Spool = 0.0; //mA, base no-load current for spool motor
 float SpoolMotorCurrent = 0.0; //mA, current measurement for spool motor
 
-const bool GUIDE_DIR_PIN_INVERTED = false; 
+const bool GUIDE_DIR_PIN_INVERTED = true; 
 
 // Stepper timing variables
 bool guideMovingTowardMax = false;
@@ -131,7 +132,8 @@ bool encoderPcntReady = false;
 bool fanPcntReady = false;
 
 // Calibration variables
-const double speedCal = 500.0 / 703.23f; 
+//const double speedCal = 500.0 / 703.23f; 
+const double speedCal = 500.0 / 715.23f;
 
 // timing variable
 unsigned long lastDiagnoseTime = 0;
@@ -144,7 +146,7 @@ volatile bool encoderPulseEvent = false;
 bool hasValidPulse = false;
 
 double fanRpm = 0.0; // RPM
-uint8_t fanDutyPercent = 40; // percent, 0..100
+uint8_t fanDutyPercent = 100; // percent, 0..100
 
 // Loop task periods (ms). Keep stepperControl in the fast path every iteration.
 const unsigned long MEASUREMENT_PERIOD_MS = 10;
@@ -159,7 +161,7 @@ const unsigned long STOP_TIMEOUT_MS = 300;
 
 // Ignore tiny near-zero speed noise when integrating traveled distance.
 const float SPEED_DEADBAND_MPS = 0.0002f; // 0.2 mm/s
-const float STEPPER_MAX_SPEED = 10000.0f;
+const float STEPPER_MAX_SPEED = 8000.0f;
 const float STEPPER_MAX_ACCELERATION = 10000.0f;
 unsigned long lastDistanceUpdateMs = 0;
 char serialInputBuffer[64];
@@ -167,6 +169,8 @@ uint8_t serialInputIndex = 0;
 
 long lastStepperPosSteps = 0;
 long guideMaxPositionSteps = 0;
+const double guideInitialPosition = 0.005;
+long guideInitialPosSteps = 0;
 
 enum LoadState {
     LOAD_IDLE = 0,
@@ -249,6 +253,7 @@ void loop() {
         updateLoadMode(microsCurrent);
     } else {
         stepperControl(microsCurrent, speed);
+        //stepperControl(microsCurrent, 1.5); // just for testing
     }
 
     if (limitSwitchEvent && loadState == LOAD_IDLE) {
@@ -259,7 +264,6 @@ void loop() {
         if (digitalRead(limitSwitchLowPin) == HIGH) {
             guideMovingTowardMax = true;
             guidePosition = 0.0;
-            layerNumber++;
             guideStepper->forceStopAndNewPosition(0);
             guideStepper->moveTo((int32_t)guideMaxPositionSteps);
             lastStepperPosSteps = 0;
@@ -328,10 +332,18 @@ void loop() {
 /// @brief Print diagnostic information to the serial monitor at a specified interval
 /// @param interval The interval in milliseconds between diagnostic prints
 void diagnose() {
-    Serial.print("Guide positon: ");
-    Serial.print(guidePosition, 4);
+    Serial.print("Guide position (cm): ");
+    Serial.print(fabs(guidePosition) * 100.0f, 2);
     Serial.print(", Layer: ");
     Serial.print(layerNumber);
+    Serial.print(", Speed (mm/s): ");
+    Serial.print(speed * 1000.0f, 2);
+    Serial.print(", Target speed (mm/s): ");
+    Serial.print(targetSpeed * 1000.0f, 2);
+    Serial.print(", Spool current (mA): ");
+    Serial.print(SpoolMotorCurrent, 2);
+    Serial.print(", Spool current target (mA): ");
+    Serial.print(SetTorqueCurrent, 2);
     Serial.println();
 }
 
@@ -391,7 +403,7 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
 
 void enterLoadMode() {
     loadState = LOAD_HOMING;
-    setGuideDriverCurrent(GUIDE_TMC_RUN_CURRENT_MA);
+    setGuideDriverCurrent(1500); // Use higher current for homing to ensure the guide can reliably reach the limit switch
     guideStepper->setSpeedInHz((uint32_t)STEPPER_MAX_SPEED);
     guideStepper->runForward();
     analogWrite(motorSpoolPin, 0); // spool stands still in load mode
@@ -401,6 +413,7 @@ void enterLoadMode() {
 
 void exitLoadMode() {
     loadState = LOAD_IDLE;
+    setGuideDriverCurrent(GUIDE_TMC_RUN_CURRENT_MA); // Restore normal running current for the guide
     // Reset winding state when leaving load mode.
     traveledDistance = 0.0;
     guidePosition = 0.0;
@@ -429,6 +442,12 @@ void updateLoadMode(unsigned long microsCurrent) {
             if (digitalRead(limitSwitchLowPin) == HIGH) {
                 guideStepper->stopMove();
                 guideStepper->forceStopAndNewPosition(0);
+                guideStepper->moveTo((int32_t)guideInitialPosSteps);
+                while (guideStepper->isRunning()) {
+                    delay(1);
+                }
+                guideStepper->stopMove();
+                guideStepper->forceStopAndNewPosition((int32_t)0);
                 loadState = LOAD_WAIT_PHASE;
                 break;
             }
@@ -497,7 +516,8 @@ void initGuideStepper() {
     guideStepper->setDirectionPin(dirPin, !GUIDE_DIR_PIN_INVERTED);
     guideStepper->setSpeedInHz((uint32_t)STEPPER_MAX_SPEED);
     guideStepper->setAcceleration((uint32_t)STEPPER_MAX_ACCELERATION);
-    guideMaxPositionSteps = (long)(guideMaxPosition * stepsPerRevolution / leadScrewPitch + 0.5);
+    guideMaxPositionSteps = -(long)(guideMaxPosition * stepsPerRevolution / leadScrewPitch + 0.5);
+    guideInitialPosSteps = -(long)(guideInitialPosition * stepsPerRevolution / leadScrewPitch + 0.5);
 
     // Home the guide against the low limit switch before normal operation starts.
     guideMovingTowardMax = false;
@@ -510,8 +530,17 @@ void initGuideStepper() {
     }
     guideStepper->stopMove();
     guideStepper->forceStopAndNewPosition((int32_t)0);
+
+    guideStepper->moveTo((int32_t)guideInitialPosSteps);
+    while (guideStepper->isRunning()) {
+        delay(1);
+    }
+    guideStepper->stopMove();
+    guideStepper->forceStopAndNewPosition((int32_t)0);
+
     lastStepperPosSteps = 0;
     guidePosition = 0.0;
+    layerNumber = 0;
 
 }
 
