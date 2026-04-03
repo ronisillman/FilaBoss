@@ -83,7 +83,7 @@ void initFanControlAndTach();
 void setFanDutyPercent(uint8_t percent);
 void updateFanRpm();
 void enterLoadMode();
-void exitLoadMode();
+void exitLoadMode(bool keepStopped = false);
 void updateLoadMode(unsigned long microsCurrent);
 void syncGuidePositionFromStepper();
 void initGuideTmcUart();
@@ -115,9 +115,12 @@ const bool GUIDE_DIR_PIN_INVERTED = true;
 
 // Stepper timing variables
 bool guideMovingTowardMax = false;
+bool guideEndpointHandled = false;
 
 // Wait for load phase on reset
 bool waitingForLoad = true;
+bool controlPaused = false;
+double commandedAbsSpeed = 0.0; //m/s, absolute value of the desired filament speed, used for stepper speed control
 
 double speed = 0.0; //m/s, current speed of the filament, calculated from encoder counts
 double traveledDistance = 0.0;    // m, total distance traveled by the filament, calculated by integrating speed over time
@@ -156,7 +159,7 @@ const unsigned long MEASUREMENT_PERIOD_MS = 10;
 const unsigned long DISTANCE_PERIOD_MS = 100;
 const unsigned long SERIAL_INPUT_PERIOD_MS = 100;
 const unsigned long MOTOR_CTRL_PERIOD_MS = 10;
-const unsigned long POSITION_SYNC_PERIOD_MS = 50;
+const unsigned long POSITION_SYNC_PERIOD_MS = 20;
 const unsigned long DIAGNOSE_CALL_PERIOD_MS = 1000;
 const unsigned long FAN_MEASUREMENT_PERIOD_MS = 500;
 const unsigned long TMC_STATUS_PERIOD_MS = 200;
@@ -250,20 +253,29 @@ void loop() {
     
     // Only react to extruder pin if manual switch is NOT engaged
     if (!extruderON && !manualSwitchON) {
-            Serial.println("Extruder srew off. Pausing control until it is turned on or manual switch is engaged.");
-            analogWrite(motorRollerPin, 0);
-            analogWrite(motorSpoolPin, 0);
-            if (guideStepper != nullptr) {
-                guideStepper->stopMove();
+            if (!controlPaused) {
+                Serial.println("Extruder srew off. Pausing control until it is turned on or manual switch is engaged.");
+                analogWrite(motorRollerPin, 0);
+                analogWrite(motorSpoolPin, 0);
+                if (guideStepper != nullptr) {
+                    guideStepper->stopMove();
+                }
             }
-            while (!extruderON && !manualSwitchON) {
-                extruderON = (digitalRead(extruderSrewPin) == LOW);
-                manualSwitchON = (digitalRead(switchManualPin) == LOW);
-                delay(10);
+            controlPaused = true;
+    } else {
+        if (controlPaused) {
+            if (guideMovingTowardMax && LOAD_IDLE == loadState) {
+                //guideStepper->setSpeedInHz(commandedAbsSpeed);
+                guideStepper->moveTo((int32_t)guideMaxPositionSteps);
+            } else if (LOAD_IDLE == loadState) {
+                //guideStepper->setSpeedInHz(commandedAbsSpeed);
+                guideStepper->moveTo(0);
             }
-            Serial.println("Continuing control after extruder input high.");
+            Serial.println("Continuing normal operation.");
+        }
+        controlPaused = false;
     }
-    
+
 
     unsigned long currentMillis = millis();
     unsigned long microsCurrent = micros();
@@ -281,14 +293,15 @@ void loop() {
     if (loadSwitchActive && loadState == LOAD_IDLE) {
         enterLoadMode();
     } else if (!loadSwitchActive && loadState != LOAD_IDLE) {
-        exitLoadMode();
+        exitLoadMode(controlPaused);
     }
 
     if (loadState != LOAD_IDLE) {
         updateLoadMode(microsCurrent);
     } else {
-        stepperControl(microsCurrent, speed);
-        //stepperControl(microsCurrent, 1.5); // just for testing
+        if (!controlPaused) {
+            stepperControl(microsCurrent, speed);
+        }
     }
 
     if (limitSwitchEvent && loadState == LOAD_IDLE) {
@@ -332,12 +345,12 @@ void loop() {
         lastSerialInputMs = currentMillis;
     }
 
-    if (currentMillis - lastMotorCtrlMs >= MOTOR_CTRL_PERIOD_MS && loadState == LOAD_IDLE) {
+    if (currentMillis - lastMotorCtrlMs >= MOTOR_CTRL_PERIOD_MS && loadState == LOAD_IDLE && !controlPaused) {
         motorControl(targetSpeed, speed);
         lastMotorCtrlMs = currentMillis;
     }
 
-    if (currentMillis - lastPositionSyncMs >= POSITION_SYNC_PERIOD_MS && loadState == LOAD_IDLE) {
+    if (currentMillis - lastPositionSyncMs >= POSITION_SYNC_PERIOD_MS && loadState == LOAD_IDLE && !controlPaused) {
         syncGuidePositionFromStepper();
         lastPositionSyncMs = currentMillis;
     }
@@ -367,7 +380,7 @@ void loop() {
 /// @brief Print diagnostic information to the serial monitor at a specified interval
 /// @param interval The interval in milliseconds between diagnostic prints
 void diagnose() {
-/*     Serial.print("Guide position (cm): ");
+    Serial.print("Guide position (cm): ");
     Serial.print(fabs(guidePosition) * 100.0f, 2);
     Serial.print(", Layer: ");
     Serial.print(layerNumber);
@@ -380,11 +393,9 @@ void diagnose() {
     Serial.print(", Spool current target (mA): ");
     Serial.print(SetTorqueCurrent, 2);
     Serial.print("Fan RPM: ");
-    Serial.print(fanRpm, 1); */
-    Serial.print("Extrurder screw: ");
-    Serial.print(digitalRead(extruderSrewPin) == HIGH ? "HIGH" : "LOW");
-    Serial.print(", Manual switch: ");
-    Serial.print(digitalRead(switchManualPin) == HIGH ? "HIGH" : "LOW");
+    Serial.print(fanRpm, 1);
+    Serial.print(", Filament distance (cm): ");
+    Serial.print(traveledDistance * 100.0f, 2);
     Serial.println();
 }
 
@@ -408,7 +419,12 @@ void motorControl(float setSpeed, float actualSpeed) {
     analogWrite(motorSpoolPin, controlSignal_Spool);
 }
 
-
+double computeGuideSpeedHz(double filamentSpeedMps) {
+    double spoolOmega = filamentSpeedMps / (spoolRadius + layerNumber * filamentDiameter);
+    double guideOmega = spoolOmega * ratio;
+    double hz = fabs(guideOmega / (2.0 * PI) * stepsPerRevolution);
+    return hz;
+}
 
 /// @brief 
 /// @param microsCurrent //current time in microseconds for timing control of the stepper motor
@@ -421,18 +437,22 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
     double guideOmega = spoolOmega * ratio;
     desiredStepperSpeed = guideOmega / (2.0 * PI) * stepsPerRevolution;
 
-    double commandedAbsSpeed = fabs(desiredStepperSpeed);
-    if (commandedAbsSpeed <= 0.0) {
-        guideStepper->stopMove();
+    commandedAbsSpeed = fabs(desiredStepperSpeed);
+    guideStepper->setSpeedInHz(commandedAbsSpeed);
+
+    if (guideStepper->isRunning()) {
+        guideEndpointHandled = false;
         return;
     }
 
-    guideStepper->setSpeedInHz(commandedAbsSpeed);
+    long currentPosition = guideStepper->getCurrentPosition();
 
-    // Standalone-style control: run to endpoint target, then flip endpoint.
-    if (!guideStepper->isRunning()) {
+    // Only count a layer when the guide has actually reached either endpoint.
+    if (!guideEndpointHandled && (currentPosition == 0 || currentPosition == guideMaxPositionSteps)) {
         layerNumber++;
-        if (guideMovingTowardMax) {
+        guideEndpointHandled = true;
+
+        if (currentPosition == guideMaxPositionSteps) {
             guideStepper->moveTo(0);
             guideMovingTowardMax = false;
         } else {
@@ -452,21 +472,23 @@ void enterLoadMode() {
     analogWrite(motorRollerPin, RollerPID.compute(speed)); // pulley keeps PID control
 }
 
-void exitLoadMode() {
+void exitLoadMode(bool keepStopped) {
     loadState = LOAD_IDLE;
     setGuideDriverCurrent(GUIDE_TMC_RUN_CURRENT_MA); // Restore normal running current for the guide
     // Reset winding state when leaving load mode.
     traveledDistance = 0.0;
     guidePosition = 0.0;
     layerNumber = 0;
+    lastStepperPosSteps = 0;
+    guideEndpointHandled = false;
     // Resume normal mode by moving away from the low/home limit first.
     guideMovingTowardMax = true;
     guideStepper->stopMove();
     guideStepper->forceStopAndNewPosition(0);
-    guideStepper->moveTo((int32_t)guideMaxPositionSteps);
-    lastStepperPosSteps = 0;
+    if (!keepStopped) {
+        guideStepper->moveTo((int32_t)guideMaxPositionSteps);
+    }
 
-    digitalWrite(stepPin, LOW);
     analogWrite(motorRollerPin, 0);
     analogWrite(motorSpoolPin, 0);
 }
