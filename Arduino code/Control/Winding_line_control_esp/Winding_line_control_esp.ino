@@ -118,7 +118,6 @@ bool guideMovingTowardMax = false;
 
 // Wait for load phase on reset
 bool waitingForLoad = true;
-bool extruderPauseActive = false;
 
 double speed = 0.0; //m/s, current speed of the filament, calculated from encoder counts
 double traveledDistance = 0.0;    // m, total distance traveled by the filament, calculated by integrating speed over time
@@ -162,6 +161,7 @@ const unsigned long DIAGNOSE_CALL_PERIOD_MS = 1000;
 const unsigned long FAN_MEASUREMENT_PERIOD_MS = 500;
 const unsigned long TMC_STATUS_PERIOD_MS = 200;
 const unsigned long STOP_TIMEOUT_MS = 300;
+const float FAN_TACH_PULSES_PER_REV = 2.0f;
 
 // Ignore tiny near-zero speed noise when integrating traveled distance.
 const float SPEED_DEADBAND_MPS = 0.0002f; // 0.2 mm/s
@@ -242,28 +242,28 @@ void loop() {
         if (digitalRead(switchLoadPin) == LOW) {
             waitingForLoad = false;
         }
-        delay(1);
+        delay(10);
     }
 
-    bool extruderLow = (digitalRead(extruderSrewPin) == LOW);
-    if (extruderLow) {
-        if (!extruderPauseActive) {
-            extruderPauseActive = true;
-            Serial.println("Extruder input low. Pausing control until it returns high.");
+    bool extruderON = (digitalRead(extruderSrewPin) == LOW);
+    bool manualSwitchON = (digitalRead(switchManualPin) == LOW);
+    
+    // Only react to extruder pin if manual switch is NOT engaged
+    if (!extruderON && !manualSwitchON) {
+            Serial.println("Extruder srew off. Pausing control until it is turned on or manual switch is engaged.");
             analogWrite(motorRollerPin, 0);
             analogWrite(motorSpoolPin, 0);
             if (guideStepper != nullptr) {
                 guideStepper->stopMove();
             }
-        }
-        delay(1);
-        return;
+            while (!extruderON && !manualSwitchON) {
+                extruderON = (digitalRead(extruderSrewPin) == LOW);
+                manualSwitchON = (digitalRead(switchManualPin) == LOW);
+                delay(10);
+            }
+            Serial.println("Continuing control after extruder input high.");
     }
-
-    if (extruderPauseActive) {
-        extruderPauseActive = false;
-        Serial.println("Extruder input high. Resuming control.");
-    }
+    
 
     unsigned long currentMillis = millis();
     unsigned long microsCurrent = micros();
@@ -367,7 +367,7 @@ void loop() {
 /// @brief Print diagnostic information to the serial monitor at a specified interval
 /// @param interval The interval in milliseconds between diagnostic prints
 void diagnose() {
-    Serial.print("Guide position (cm): ");
+/*     Serial.print("Guide position (cm): ");
     Serial.print(fabs(guidePosition) * 100.0f, 2);
     Serial.print(", Layer: ");
     Serial.print(layerNumber);
@@ -379,6 +379,12 @@ void diagnose() {
     Serial.print(SpoolMotorCurrent, 2);
     Serial.print(", Spool current target (mA): ");
     Serial.print(SetTorqueCurrent, 2);
+    Serial.print("Fan RPM: ");
+    Serial.print(fanRpm, 1); */
+    Serial.print("Extrurder screw: ");
+    Serial.print(digitalRead(extruderSrewPin) == HIGH ? "HIGH" : "LOW");
+    Serial.print(", Manual switch: ");
+    Serial.print(digitalRead(switchManualPin) == HIGH ? "HIGH" : "LOW");
     Serial.println();
 }
 
@@ -711,8 +717,6 @@ void initFanControlAndTach() {
     ledcAttach(fanControlPin, 25000, 8);
     setFanDutyPercent(fanDutyPercent);
 
-    pinMode(fanRSpeedPin, INPUT_PULLUP);
-
     pcnt_unit_config_t fanUnitConfig = {
         .low_limit = -PCNT_H_LIM,
         .high_limit = PCNT_H_LIM,
@@ -787,7 +791,8 @@ void updateFanRpm() {
         return;
     }
 
-    fanRpm = ((float)pulseCount * 60.0f) / 2.0f; // 2 pulses/rev fan tach
+    // Convert counted pulses over FAN_MEASUREMENT_PERIOD_MS to RPM.
+    fanRpm = ((float)pulseCount * (60000.0f / (float)FAN_MEASUREMENT_PERIOD_MS)) / FAN_TACH_PULSES_PER_REV;
 }
 
 /// @brief Initialize I2C peripherals (current sensors) and check for their presence. If a sensor is not found, print an error message and halt execution.
@@ -820,6 +825,7 @@ void pinSetup() {
     pinMode (encoderPinB, INPUT);
     pinMode(switchManualPin, INPUT);
     pinMode(switchLoadPin, INPUT); 
+    pinMode(fanRSpeedPin, INPUT);
 }
 
 /// @brief Perform homing and no-load current calibration for the filament guide system.
