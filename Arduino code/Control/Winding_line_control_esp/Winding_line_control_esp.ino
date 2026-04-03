@@ -265,10 +265,12 @@ void loop() {
     } else {
         if (controlPaused) {
             if (guideMovingTowardMax && LOAD_IDLE == loadState) {
-                //guideStepper->setSpeedInHz(commandedAbsSpeed);
+                commandedAbsSpeed = fabs(computeGuideSpeedHz(speed));
+                guideStepper->setSpeedInHz(commandedAbsSpeed);
                 guideStepper->moveTo((int32_t)guideMaxPositionSteps);
             } else if (LOAD_IDLE == loadState) {
-                //guideStepper->setSpeedInHz(commandedAbsSpeed);
+                commandedAbsSpeed = fabs(computeGuideSpeedHz(speed));
+                guideStepper->setSpeedInHz(commandedAbsSpeed);
                 guideStepper->moveTo(0);
             }
             Serial.println("Continuing normal operation.");
@@ -432,12 +434,7 @@ double computeGuideSpeedHz(double filamentSpeedMps) {
 void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
     (void)microsCurrent;
 
-    double desiredStepperSpeed = 0.0;
-    double spoolOmega = filamentSpeed / (spoolRadius + layerNumber * filamentDiameter);
-    double guideOmega = spoolOmega * ratio;
-    desiredStepperSpeed = guideOmega / (2.0 * PI) * stepsPerRevolution;
-
-    commandedAbsSpeed = fabs(desiredStepperSpeed);
+    commandedAbsSpeed = fabs(computeGuideSpeedHz(filamentSpeed));
     guideStepper->setSpeedInHz(commandedAbsSpeed);
 
     if (guideStepper->isRunning()) {
@@ -477,6 +474,7 @@ void exitLoadMode(bool keepStopped) {
     setGuideDriverCurrent(GUIDE_TMC_RUN_CURRENT_MA); // Restore normal running current for the guide
     // Reset winding state when leaving load mode.
     traveledDistance = 0.0;
+    lastDistanceUpdateMs = millis();
     guidePosition = 0.0;
     layerNumber = 0;
     lastStepperPosSteps = 0;
