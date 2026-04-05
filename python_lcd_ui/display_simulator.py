@@ -24,7 +24,7 @@ class SimulatedLcdDisplay(DisplayBackend):
 
         instruction = tk.Label(
             self._root,
-            text="Controls: Arrow Up/Left=UP, Arrow Down/Right=DOWN, Space=SELECT, Esc=Quit",
+            text="Controls: Left=up, Right=down, Up=down, Down=up, Space/Enter=select, Esc=Quit",
             fg="#b8ffc9",
             bg="#0b140e",
             font=("Consolas", 10),
@@ -50,9 +50,9 @@ class SimulatedLcdDisplay(DisplayBackend):
             lbl.pack(padx=8, pady=2, anchor="w")
             self._line_labels.append(lbl)
 
-        self._root.bind("<Up>", lambda _e: self._events.append(InputEvent("up")))
+        self._root.bind("<Up>", lambda _e: self._events.append(InputEvent("down")))
         self._root.bind("<Left>", lambda _e: self._events.append(InputEvent("up")))
-        self._root.bind("<Down>", lambda _e: self._events.append(InputEvent("down")))
+        self._root.bind("<Down>", lambda _e: self._events.append(InputEvent("up")))
         self._root.bind("<Right>", lambda _e: self._events.append(InputEvent("down")))
         self._root.bind("<space>", lambda _e: self._events.append(InputEvent("select")))
         self._root.bind("<Return>", lambda _e: self._events.append(InputEvent("select")))

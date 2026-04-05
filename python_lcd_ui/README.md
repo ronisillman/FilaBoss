@@ -15,15 +15,14 @@ This starter project gives you one UI codebase with two backends:
 
 ### Simulator
 
-- Up/Left arrow: navigate up
-- Down/Right arrow: navigate down
-- Space/Enter: select
+- Up/Down arrow: move between menus or change the selected value
+- Space/Enter: select the current menu field
 - Escape: quit
 
 ### Hardware (rotary encoder + push button)
 
-- Rotate knob: up/down navigation (or value change in edit mode)
-- Push knob: select/toggle
+- Rotate knob: move between menus or change the selected value
+- Push knob: select the current menu field
 
 Default BCM pins in this starter:
 
@@ -44,6 +43,14 @@ python -m venv .venv
 
 python main.py --mode sim
 ```
+
+## Menu layout
+
+- MAIN: filament speed, filament diameter, fan speed
+- PID: tune P, I, and D for Pulley or Spool
+- FAN: change fan speed
+
+The top bar highlights the active menu. On PID, press select to enter field mode, use the rotary or arrows to change the active field, and press select again to move to the next field.
 
 ## Quick start on Raspberry Pi (real LCD)
 
@@ -78,9 +85,9 @@ python3 main.py --mode hw --i2c-address 0x27
 
 ## Pages included
 
-- Status page
-- Temperature page
-- Motor page
+- MAIN dashboard
+- PID tuning page
+- FAN control page
 
 These are sample pages to help you plug in your real control values later.
 
