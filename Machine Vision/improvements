@@ -1,0 +1,136 @@
+1️⃣ Subpixel Edge Detection
+
+Goal: Increase diameter precision beyond 1-pixel resolution.
+
+Required changes:
+
+Replace binary edge detection with grayscale edge analysis.
+
+For each scanline:
+
+Detect intensity transition using gradient (Sobel) OR
+
+Detect threshold crossing between adjacent pixels.
+
+Linearly interpolate edge position between two pixels.
+
+Compute diameter using interpolated (float) positions.
+
+Keep averaging across scanlines.
+
+Expected result:
+Precision improved from ±1 px to ~±0.1 px.
+
+2️⃣ Automatic MM_PER_PIXEL Calibration
+
+Goal: Remove hardcoded pixel-to-mm scale.
+
+Required changes:
+
+Add calibration mode.
+
+Detect object of known diameter (or known-width rectangle).
+
+Measure its pixel diameter using same algorithm.
+
+Compute:
+
+MM_PER_PIXEL = known_mm / measured_pixels
+
+
+Store value (optionally save to file).
+
+Use updated scale for live measurements.
+
+Optional upgrade:
+
+Recalculate if resolution changes.
+
+3️⃣ Performance Optimization
+
+Goal: Improve FPS and CPU efficiency.
+
+Required changes:
+
+Convert to grayscale AFTER cropping ROIs (not full frame).
+
+Reduce frame resolution if full width not needed.
+
+Replace Python scanline loop with vectorized NumPy logic.
+
+Disable or optionally toggle debug windows (imshow).
+
+Reduce NUM_SCANLINES if performance limited.
+
+Expected result:
+
+Higher FPS
+
+Lower CPU load
+
+More stable real-time behavior
+
+4️⃣ Ovality Detection
+
+Goal: Detect non-circular filament shape.
+
+Option A (Simple):
+
+Add horizontal scanlines.
+
+Compute horizontal diameter.
+
+Compare with vertical diameter.
+
+Compute:
+
+ovality = (D_max - D_min) / D_avg
+
+
+Option B (More Accurate):
+
+Detect binary contour in ROI.
+
+Fit ellipse to contour.
+
+Extract:
+
+Major axis
+
+Minor axis
+
+Rotation angle
+
+Compute ovality from axes.
+
+Expected result:
+
+Detect deformation even if average diameter is correct.
+
+5️⃣ Perspective / Optical Correction (Optional Advanced)
+
+Goal: Remove distortion from camera angle.
+
+Required changes:
+
+Use calibration grid.
+
+Compute homography matrix.
+
+Warp frame to top-down view before measurement.
+
+Recalculate MM_PER_PIXEL after warping.
+
+🎯 Final Upgrade Priority (Recommended Order)
+
+Subpixel edge detection (biggest accuracy gain)
+
+Auto calibration
+
+Ovality detection
+
+Performance optimization
+
+Perspective correction (only if needed)
+
+This is structured so another LLM can directly implement each feature into your current code without redesigning the system.
