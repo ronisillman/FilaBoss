@@ -16,20 +16,26 @@ def main():
             # Read anything from ESP32
             line = ser.readline().decode("utf-8", errors="replace").strip()
             if line:
-                print("RX <-", line)
+                if line.startswith("ACK:"):
+                    print("ACK <-", line[4:])
+                elif line.startswith("EVT:"):
+                    print("EVT <-", line[4:])
+                else:
+                    print("RX <-", line)
 
             # Send test command once per second
             now = time.monotonic()
             if now - last_tx >= 1.0:
                 if tx_count % 3 == 0:
-                    msg = "PING"
+                    cmd = "PING"
                 elif tx_count % 3 == 1:
-                    msg = "LED_ON"
+                    cmd = "LED_ON"
                 else:
-                    msg = "LED_OFF"
+                    cmd = "LED_OFF"
 
-                ser.write((msg + "\n").encode("utf-8"))
-                print("TX ->", msg)
+                frame = f"CMD:{cmd}"
+                ser.write((frame + "\n").encode("utf-8"))
+                print("TX ->", frame)
 
                 tx_count += 1
                 last_tx = now
