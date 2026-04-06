@@ -16,7 +16,8 @@ class SimulatedLcdDisplay(DisplayBackend):
         self._open = True
         self._events: deque[InputEvent] = deque()
         self._buffer = [" " * self.cols for _ in range(self.rows)]
-        self._cell_size = 28
+        self._cell_width = 22
+        self._cell_height = 26
         self._cell_gap = 3
         self._cell_outline = "#447e4e"
         self._cell_fill = "#18341f"
@@ -29,7 +30,7 @@ class SimulatedLcdDisplay(DisplayBackend):
 
         instruction = tk.Label(
             self._root,
-            text="Controls: Left=up, Right=down, Up=down, Down=up, Space/Enter=select, D=Target Dia, S=Target Spd, Esc=Quit",
+            text="Controls: Left=up, Right=down, Up=down, Down=up, Space/Enter=select, D=Target Dia, S=Target Spd, L=Toggle Load Mode, Esc=Quit",
             fg="#b8ffc9",
             bg="#0b140e",
             font=("Consolas", 10),
@@ -41,8 +42,8 @@ class SimulatedLcdDisplay(DisplayBackend):
         frame = tk.Frame(self._root, bg="#1d4f2b", bd=4, relief="ridge")
         frame.pack(padx=10, pady=(2, 10), fill="both", expand=True)
 
-        canvas_width = self.cols * self._cell_size + (self.cols + 1) * self._cell_gap
-        canvas_height = self.rows * self._cell_size + (self.rows + 1) * self._cell_gap
+        canvas_width = self.cols * self._cell_width + (self.cols + 1) * self._cell_gap
+        canvas_height = self.rows * self._cell_height + (self.rows + 1) * self._cell_gap
         self._canvas = tk.Canvas(
             frame,
             width=canvas_width,
@@ -56,10 +57,10 @@ class SimulatedLcdDisplay(DisplayBackend):
         for row in range(self.rows):
             row_items: list[tuple[int, int]] = []
             for col in range(self.cols):
-                x1 = self._cell_gap + col * (self._cell_size + self._cell_gap)
-                y1 = self._cell_gap + row * (self._cell_size + self._cell_gap)
-                x2 = x1 + self._cell_size
-                y2 = y1 + self._cell_size
+                x1 = self._cell_gap + col * (self._cell_width + self._cell_gap)
+                y1 = self._cell_gap + row * (self._cell_height + self._cell_gap)
+                x2 = x1 + self._cell_width
+                y2 = y1 + self._cell_height
                 rect_id = self._canvas.create_rectangle(
                     x1,
                     y1,
@@ -89,6 +90,8 @@ class SimulatedLcdDisplay(DisplayBackend):
         self._root.bind("<D>", lambda _e: self._events.append(InputEvent("target_dia")))
         self._root.bind("<s>", lambda _e: self._events.append(InputEvent("target_spd")))
         self._root.bind("<S>", lambda _e: self._events.append(InputEvent("target_spd")))
+        self._root.bind("<l>", lambda _e: self._events.append(InputEvent("load_toggle")))
+        self._root.bind("<L>", lambda _e: self._events.append(InputEvent("load_toggle")))
         self._root.bind("<Escape>", lambda _e: self._events.append(InputEvent("quit")))
 
         self._root.focus_force()
