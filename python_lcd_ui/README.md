@@ -61,11 +61,14 @@ sudo raspi-config
 # Interface Options -> I2C -> Enable
 ```
 
-2. Install dependencies:
+2. Create a virtual environment and install dependencies:
 
 ```bash
 sudo apt update
-sudo apt install -y python3-pip python3-smbus i2c-tools
+sudo apt install -y python3-pip python3-smbus python3-venv i2c-tools
+cd ~/FilaBoss/python_lcd_ui
+python3 -m venv .venv
+source .venv/bin/activate
 pip3 install -r requirements.txt
 ```
 
@@ -77,11 +80,14 @@ i2cdetect -y 1
 
 Typical addresses are `0x27` or `0x3F`.
 
-4. Run hardware mode:
+4. Activate the virtual environment and run hardware mode:
 
 ```bash
+source .venv/bin/activate
 python3 main.py --mode hw --i2c-address 0x27
 ```
+
+In hardware mode, the program prints a small terminal heartbeat once per second so you can confirm the loop is running.
 
 ## Pages included
 
