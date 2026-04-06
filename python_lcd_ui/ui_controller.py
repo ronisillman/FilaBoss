@@ -196,9 +196,9 @@ class UiController:
 
     def _render_main_menu(self) -> list[str]:
         return [
-            f"Dia: {self.state.filament_diameter_mm:.2f} mm",
-            f"Spd: {self.state.filament_speed_mpm:.1f} mm/s",
-            f"Fan: {self._fan_speed_rpm()} rpm",
+            f"Dia: {self.state.filament_diameter_mm:4.2f} mm",
+            f"Spd: {self.state.filament_speed_mpm:4.1f} mm/s",
+            f"Fan: {self._fan_speed_rpm():4d} rpm",
         ]
 
     def _render_pid_menu(self) -> list[str]:
@@ -225,21 +225,31 @@ class UiController:
             f"{self._pid_gain_segment('P', gains.p, p_digit, p_dot, blink_on, focused=(focus_item == 'P' and not self.state.menu_edit))} {self._pid_gain_segment('I', gains.i, i_digit, i_dot, blink_on, focused=(focus_item == 'I' and not self.state.menu_edit))}",
             self._pid_gain_segment("D", gains.d, d_digit, d_dot, blink_on, focused=(focus_item == "D" and not self.state.menu_edit)),
         ]
-
+    
     def _render_fan_menu(self) -> list[str]:
         blink_on = self._blink_on()
         focused = self._current_focus_item() == "FAN_SPEED" and not self.state.menu_edit
-        fan_text = f"{self.state.fan_speed_pct:3d}%"
+
+        fan_text = f"{self.state.fan_speed_pct}%"
+        width = len(fan_text)
+
         if self.state.menu_edit:
-            inner = fan_text if blink_on else "    "
+            inner = fan_text if blink_on else " " * width
             fan_text = f"[{inner}]"
         elif focused:
             fan_text = self._focused_bracket(fan_text, blink_on)
+        else:
+            fan_text = f" {fan_text}"
+
+        rpm_value = self._fan_speed_rpm()
+        rpm_width = len(str(rpm_value))
+        rpm_text = f"{rpm_value:>{rpm_width}d}"
+        
         return [
-            f"Fan: {fan_text}",
-            f"RPM: {self._fan_speed_rpm():4d}",
+            f"Fan:{fan_text}",
+            f"RPM: {rpm_text}",
             "",
-        ]
+    ]
 
     def _motor_names(self) -> list[str]:
         return ["Pulley", "Spool"]
