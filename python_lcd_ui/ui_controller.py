@@ -263,7 +263,8 @@ class UiController:
 
     def _pid_motor_line(self, motor_name: str, focused: bool, editing: bool, blink_on: bool) -> str:
         if editing:
-            return f"Motor:[{motor_name}]"
+            inner = motor_name if blink_on else " " * len(motor_name)
+            return f"Motor:[{inner}]"
         if focused:
             return f"Motor:{self._focused_bracket(motor_name, blink_on)}"
         return f"Motor: {motor_name}"
