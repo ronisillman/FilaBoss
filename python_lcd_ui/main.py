@@ -52,7 +52,6 @@ def main() -> None:
             )
 
         frame_delay = 1.0 / max(1.0, args.fps)
-        last_hw_heartbeat = 0.0
         running = True
 
         while running:
@@ -65,12 +64,14 @@ def main() -> None:
             elif input_device is not None:
                 events = input_device.poll_events()
 
-            if args.mode == "hw":
-                now = time.monotonic()
-                if now - last_hw_heartbeat >= 1.0:
-                    print("hardware mode test")
-                    last_hw_heartbeat = now
             for event in events:
+                if args.mode == "hw":
+                    if event.kind == "up":
+                        print("encoder left")
+                    elif event.kind == "down":
+                        print("encoder right")
+                    elif event.kind == "select":
+                        print("encoder pushed")
                 if not controller.handle_event(event):
                     running = False
                     break
