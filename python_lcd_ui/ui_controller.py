@@ -31,6 +31,7 @@ class AppState:
     filament_diameter_mm: float = 1.75
     fan_speed_pct: int = 35
     fan_rpm: float = 700.0
+    main_target: str = "Dia"
     pulley_gains: PidGains = field(default_factory=PidGains)
     spool_gains: PidGains = field(
         default_factory=lambda: PidGains(
@@ -56,6 +57,14 @@ class UiController:
     def handle_event(self, event: InputEvent) -> bool:
         if event.kind == "quit":
             return False
+
+        if event.kind == "target_dia":
+            self.state.main_target = "Dia"
+            return True
+
+        if event.kind == "target_spd":
+            self.state.main_target = "Spd"
+            return True
 
         if event.kind == "select":
             self._handle_select()
@@ -182,23 +191,34 @@ class UiController:
     def _render_tab_strip(self) -> str:
         focus_item = self._current_focus_item() if not self.state.menu_edit else ""
         blink_on = self._blink_on()
-        tabs = [
-            self._tab_label("MAIN", focus_item == "MAIN", blink_on),
-            self._tab_label("PID", focus_item == "PID", blink_on),
-            self._tab_label("FAN", focus_item == "FAN", blink_on),
-        ]
-        return f"{tabs[0]} {tabs[1]} {tabs[2]}"
+        chars = [" "] * self.cols
 
-    def _tab_label(self, label: str, focused: bool, blink_on: bool) -> str:
+        self._write_tab(chars, 0, "MAIN", focused=(focus_item == "MAIN"), blink_on=blink_on)
+        self._write_tab(chars, 6, "PID", focused=(focus_item == "PID"), blink_on=blink_on)
+        self._write_tab(chars, 11, "FAN", focused=(focus_item == "FAN"), blink_on=blink_on)
+
+        return "".join(chars)
+
+    def _write_tab(self, chars: list[str], start_index: int, label: str, focused: bool, blink_on: bool) -> None:
+        width = len(label) + 2
+
         if not focused:
-            return label
-        return self._focused_bracket(label, blink_on)
+            rendered = f" {label} "
+        elif blink_on:
+            rendered = f"[{label}]"
+        else:
+            rendered = f" {label} "
+
+        for offset, char in enumerate(rendered[:width]):
+            index = start_index + offset
+            if 0 <= index < self.cols:
+                chars[index] = char
 
     def _render_main_menu(self) -> list[str]:
         return [
             f"Dia: {self.state.filament_diameter_mm:4.2f} mm",
             f"Spd: {self.state.filament_speed_mpm:4.1f} mm/s",
-            f"Fan: {self._fan_speed_rpm():4d} rpm",
+            f"Target: {self.state.main_target}",
         ]
 
     def _render_pid_menu(self) -> list[str]:
