@@ -40,6 +40,7 @@ class TelemetryFromEsp32:
         state.load_mode = self.load_mode
         state.pulley_speed_mps = self.filament_speed_mps
         state.fan_rpm = self.fan_rpm
+        state.diameter_travelled_mm = self.diameter_travelled_mm
 
 
 @dataclass
@@ -201,7 +202,8 @@ def main() -> None:
                     running = False
                     break
 
-            controller.tick()
+            use_simulated_feedback = not (args.mode == "hw" and serial_bridge is not None)
+            controller.tick(simulate_feedback=use_simulated_feedback)
 
             if args.mode == "hw" and serial_bridge is not None:
                 now = time.monotonic()

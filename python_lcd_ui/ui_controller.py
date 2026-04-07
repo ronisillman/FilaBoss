@@ -36,6 +36,7 @@ class AppState:
     target_speed_tenths: int = 120
     load_mode: bool = False
     pulley_speed_mps: float = 10.0
+    diameter_travelled_mm: float = 0.0
     pulley_gains: PidGains = field(default_factory=PidGains)
     spool_gains: PidGains = field(
         default_factory=lambda: PidGains(
@@ -182,7 +183,10 @@ class UiController:
         idx = max(0, min(self.state.focus_index, len(items) - 1))
         return items[idx]
 
-    def tick(self) -> None:
+    def tick(self, simulate_feedback: bool = True) -> None:
+        if not simulate_feedback:
+            return
+
         elapsed = time.monotonic() - self._start
         diameter_wave = 1.75 + math.sin(elapsed * 0.35) * 0.02
         fan_trim = (self.state.fan_speed_pct - 50) * 0.02

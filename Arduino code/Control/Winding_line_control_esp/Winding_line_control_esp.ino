@@ -252,8 +252,8 @@ void setup() {
     Serial.println("Pins initialized.");
     initGuideTmcUart();
     Serial.println("TMC2209 UART initialized for guide driver.");
-    // initRaspberrySerial();
-    // Serial.println("Raspberry UART2 JSON link initialized.");
+    initRaspberrySerial();
+    Serial.println("Raspberry UART2 JSON link initialized.");
     initGuideStepper();
     Serial.println("Guide stepper initialized.");
     initPCNT();
@@ -344,12 +344,12 @@ void loop() {
     static unsigned long lastRaspberryTelemetryMs = 0;
 
     // Uncomment to enable Raspberry UART2 JSON RX.
-    // pollRaspberrySerial();
+    pollRaspberrySerial();
 
     // Uncomment to enable command-timeout handling.
-    // if (raspberrySerialReady && (currentMillis - lastRaspberryCommandMs > RASPBERRY_COMMAND_TIMEOUT_MS)) {
-    //     // Keep last command by default. Add fail-safe behavior here if needed.
-    // }
+    if (raspberrySerialReady && (currentMillis - lastRaspberryCommandMs > RASPBERRY_COMMAND_TIMEOUT_MS)) {
+    //     Keep last command by default. Add fail-safe behavior here if needed.
+    }
 
     if (loadSwitchActive && loadState == LOAD_IDLE) {
         enterLoadMode();
@@ -432,10 +432,10 @@ void loop() {
     }
 
     // Uncomment to enable Raspberry UART2 JSON TX telemetry.
-    // if (raspberrySerialReady && currentMillis - lastRaspberryTelemetryMs >= RASPBERRY_TELEMETRY_PERIOD_MS) {
-    //     sendTelemetryToRaspberry();
-    //     lastRaspberryTelemetryMs = currentMillis;
-    // }
+    if (raspberrySerialReady && currentMillis - lastRaspberryTelemetryMs >= RASPBERRY_TELEMETRY_PERIOD_MS) {
+        sendTelemetryToRaspberry();
+        lastRaspberryTelemetryMs = currentMillis;
+    }
 
     // Re-attach interrupt after debounce period, but only if not already attached
     if (currentMillis - limit_triggered >= 500 && !interruptAttached){
