@@ -18,6 +18,7 @@ from ui_controller import UiController
 @dataclass
 class TelemetryFromEsp32:
     load_mode: bool
+    waiting_for_load: bool
     filament_speed_mps: float
     fan_rpm: float
     diameter_travelled_mm: float
@@ -31,6 +32,7 @@ class TelemetryFromEsp32:
 
         return cls(
             load_mode=bool(data.get("load_mode", False)),
+            waiting_for_load=bool(data.get("waiting_for_load", False)),
             filament_speed_mps=float(data.get("filament_speed_mps", 0.0)),
             fan_rpm=float(data.get("fan_rpm", 0.0)),
             diameter_travelled_mm=float(data.get("diameter_travelled_mm", 0.0)),
@@ -40,6 +42,7 @@ class TelemetryFromEsp32:
     def apply_to_controller(self, controller: UiController) -> None:
         state = controller.state
         state.load_mode = self.load_mode
+        state.waiting_for_load = self.waiting_for_load
         # ESP sends m/s, UI displays mm/s.
         state.pulley_speed_mps = self.filament_speed_mps * 1000.0
         state.fan_rpm = self.fan_rpm
@@ -176,6 +179,8 @@ def main() -> None:
                     baudrate=args.serial_baudrate,
                     timeout=0.0,
                 )
+                # Show startup prompt until ESP reports normal operation.
+                controller.state.waiting_for_load = True
 
         frame_delay = 1.0 / max(1.0, args.fps)
         tx_period = 1.0 / max(1.0, args.serial_tx_hz)

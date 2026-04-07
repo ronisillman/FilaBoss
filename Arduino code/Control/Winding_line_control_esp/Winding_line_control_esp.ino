@@ -106,6 +106,7 @@ TMC2209Stepper guideDriver(&TMCSerial, GUIDE_TMC_R_SENSE, 0);
 
 struct TelemetryFromEsp32 {
     bool load_mode;
+    bool waiting_for_load;
     float filament_speed_mps;
     float fan_rpm;
     float diameter_travelled_mm;
@@ -294,7 +295,15 @@ void loop() {
         Serial.println("Initializing complete. Waiting for load switch activation to start normal operation...");
     }
 
+    static unsigned long lastWaitingTelemetryMs = 0;
     while (waitingForLoad) {
+        pollRaspberrySerial();
+        unsigned long waitNowMs = millis();
+        if (raspberrySerialReady && (waitNowMs - lastWaitingTelemetryMs >= RASPBERRY_TELEMETRY_PERIOD_MS)) {
+            sendTelemetryToRaspberry();
+            lastWaitingTelemetryMs = waitNowMs;
+        }
+
         if (digitalRead(switchLoadPin) == LOW) {
             waitingForLoad = false;
         }
@@ -1145,6 +1154,7 @@ void sendTelemetryToRaspberry() {
 
     TelemetryFromEsp32 telemetry = {
         (loadState != LOAD_IDLE),
+        waitingForLoad,
         (float)speed,
         (float)fanRpm,
         (float)(traveledDistance * 1000.0),
@@ -1153,6 +1163,7 @@ void sendTelemetryToRaspberry() {
 
     StaticJsonDocument<320> doc;
     doc["load_mode"] = telemetry.load_mode;
+    doc["waiting_for_load"] = telemetry.waiting_for_load;
     doc["filament_speed_mps"] = telemetry.filament_speed_mps;
     doc["fan_rpm"] = telemetry.fan_rpm;
     doc["diameter_travelled_mm"] = telemetry.diameter_travelled_mm;

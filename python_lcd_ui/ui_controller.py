@@ -37,6 +37,7 @@ class AppState:
     target_diameter_hundredths: int = 175
     target_speed_tenths: int = 100
     load_mode: bool = False
+    waiting_for_load: bool = False
     pulley_speed_mps: float = 10.0
     diameter_travelled_mm: float = 0.0
     pulley_gains: PidGains = field(default_factory=PidGains)
@@ -225,6 +226,9 @@ class UiController:
         return int(elapsed * 3) % 2 == 0
 
     def render_lines(self) -> list[str]:
+        if self.state.waiting_for_load:
+            return self._render_waiting_for_load()
+
         if self.state.load_mode:
             return self._render_load_mode()
 
@@ -378,6 +382,14 @@ class UiController:
             "Adjust Pulley Speed:",
             f"Target: {target_value}",
             f"Actual: {actual_value}",
+        ]
+
+    def _render_waiting_for_load(self) -> list[str]:
+        return [
+            "Enter Load phase",
+            "at restart",
+            "Set load switch ON",
+            "to continue",
         ]
 
     def _motor_names(self) -> list[str]:
