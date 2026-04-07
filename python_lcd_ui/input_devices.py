@@ -35,10 +35,9 @@ class RotaryButtonInput:
         current_steps = self._encoder.steps
         delta = current_steps - self._last_steps
         if delta != 0:
-            if delta > 0:
-                events.append(InputEvent("up"))
-            else:
-                events.append(InputEvent("down"))
+            step_event = "up" if delta > 0 else "down"
+            for _ in range(abs(delta)):
+                events.append(InputEvent(step_event))
             self._last_steps = current_steps
 
         is_pressed = self._button.is_pressed

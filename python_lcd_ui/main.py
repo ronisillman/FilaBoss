@@ -198,13 +198,6 @@ def main() -> None:
                         pass
 
             for event in events:
-                if args.mode == "hw":
-                    if event.kind == "up":
-                        print("encoder left")
-                    elif event.kind == "down":
-                        print("encoder right")
-                    elif event.kind == "select":
-                        print("encoder pushed")
                 if not controller.handle_event(event):
                     running = False
                     break
