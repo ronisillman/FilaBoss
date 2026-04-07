@@ -50,7 +50,7 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 #define stepsPerRev 200.0 // full steps per revolution (NEMA17)
 const float microsteps = 16.0f; // microsteps per full step
 
-const uint16_t GUIDE_TMC_RUN_CURRENT_MA = 750;
+const uint16_t GUIDE_TMC_RUN_CURRENT_MA = 1000;
 const uint16_t GUIDE_TMC_HOLD_CURRENT_MA = 200;
 const uint16_t GUIDE_TMC_MICROSTEPS = (uint16_t)(microsteps + 0.5f);
 const float GUIDE_TMC_R_SENSE = 0.11f;
