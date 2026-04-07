@@ -1,7 +1,7 @@
 import serial
 import time
 
-ser = serial.Serial("/dev/serial0", 115200)
+ser = serial.Serial("/dev/ttyUSB9", 115200)
 
 count = 1
 

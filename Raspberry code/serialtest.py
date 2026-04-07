@@ -1,7 +1,7 @@
 import time
 import serial
 
-PORT = "/dev/serial0"   # Usually serial0 on Raspberry Pi
+PORT = "/dev/ttyUSB0"   # Usually serial0 on Raspberry Pi
 BAUD = 115200
 
 def main():
