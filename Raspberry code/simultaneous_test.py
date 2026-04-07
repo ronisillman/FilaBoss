@@ -8,21 +8,16 @@ ser = serial.Serial(PORT, BAUD, timeout=0.1)
 
 counter = 1
 
-try:
-    while True:
-        # Send message
-        msg = f"Hello Pi {counter}"
-        ser.write((msg + "\n").encode())
-        counter += 1
+while True:
+    # Send message
+    msg = f"Hello Pi {counter}"
+    ser.write((msg + "\n").encode())
+    counter += 1
 
-        # Read incoming messages and print them
-        line = ser.readline().decode(errors="replace").strip()
-        if line:
-            print("Received:", line)
+    # Read incoming messages and print them
+    line = ser.readline().decode().strip()
+    if line:
+        print(line)
 
-        time.sleep(1)
+    time.sleep(1)
 
-except KeyboardInterrupt:
-    print("Stopped by user")
-finally:
-    ser.close()
