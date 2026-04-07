@@ -31,6 +31,8 @@ class AppState:
     filament_diameter_mm: float = 1.75
     fan_speed_pct: int = 35
     fan_rpm: float = 700.0
+    spool_current_ma: float = 0.0
+    spool_current_target_ma: float = 500.0
     target_mode: str = "Dia"
     target_diameter_hundredths: int = 175
     target_speed_tenths: int = 120
@@ -97,10 +99,6 @@ class UiController:
                 if self.state.gain_edit_step < 5:
                     self.state.gain_edit_step += 1
                     return
-            elif self.state.edit_target == "MAIN_TRGT":
-                if self.state.gain_edit_step < 3:
-                    self.state.gain_edit_step += 1
-                    return
 
             self.state.menu_edit = False
             self.state.edit_target = ""
@@ -113,10 +111,10 @@ class UiController:
             self._switch_menu(focus_item)
             return
 
-        if focus_item in {"MOTOR", "P", "I", "D", "FAN_SPEED", "MAIN_TRGT"}:
+        if focus_item in {"MOTOR", "P", "I", "D", "FAN_SPEED", "CURRENT_TRG", "MAIN_MODE", "MAIN_TRGT"}:
             self.state.menu_edit = True
             self.state.edit_target = focus_item
-            self.state.gain_edit_step = 1 if focus_item == "MAIN_TRGT" else 0
+            self.state.gain_edit_step = 0
 
     def _handle_turn(self, direction: str) -> None:
         step = -1 if direction == "up" else 1
@@ -139,9 +137,18 @@ class UiController:
             self.state.fan_speed_pct = max(0, min(100, self.state.fan_speed_pct + step * 5))
             return
 
+        if target == "CURRENT_TRG":
+            self.state.spool_current_target_ma = max(0.0, min(995.0, self.state.spool_current_target_ma + step * 5.0))
+            return
+
         if target == "MAIN_TRGT":
-            digit_index = max(0, min(2, self.state.gain_edit_step - 1))
-            self._adjust_main_target_digit(digit_index, step)
+            self._adjust_main_target_value(step)
+            return
+
+        if target == "MAIN_MODE":
+            modes = ["Dia", "Spd"]
+            current_index = modes.index(self.state.target_mode) if self.state.target_mode in modes else 0
+            self.state.target_mode = modes[(current_index + step) % len(modes)]
             return
 
         if target == "MOTOR":
@@ -173,8 +180,8 @@ class UiController:
         if self.state.menu_index == 1:
             return ["MAIN", "PID", "FAN", "MOTOR", "P", "I", "D"]
         if self.state.menu_index == 2:
-            return ["MAIN", "PID", "FAN", "FAN_SPEED"]
-        return ["MAIN", "PID", "FAN", "MAIN_TRGT"]
+            return ["MAIN", "PID", "FAN", "FAN_SPEED", "CURRENT_TRG"]
+        return ["MAIN", "PID", "FAN", "MAIN_MODE", "MAIN_TRGT"]
 
     def _current_focus_item(self) -> str:
         items = self._menu_items()
@@ -201,6 +208,17 @@ class UiController:
         stepped_offset = round(raw_offset / 20.0) * 20.0
         stepped_offset = max(-20.0, min(20.0, stepped_offset))
         self.state.fan_rpm = max(0.0, min(2000.0, target_fan_rpm + stepped_offset))
+
+        # Keep user-selected current target and simulate measured current around it.
+        self.state.spool_current_target_ma = max(0.0, min(995.0, self.state.spool_current_target_ma))
+        current_offset = math.sin(elapsed * 0.8) * 20.0
+        self.state.spool_current_ma = max(
+            0.0,
+            min(
+                2500.0,
+                self.state.spool_current_target_ma + current_offset,
+            ),
+        )
 
     def _blink_on(self) -> bool:
         elapsed = time.monotonic() - self._start
@@ -253,11 +271,16 @@ class UiController:
     def _render_main_menu(self) -> list[str]:
         blink_on = self._blink_on()
         focus_item = self._current_focus_item() if not self.state.menu_edit else ""
+        mode_focused = focus_item == "MAIN_MODE"
+        mode_editing = self.state.menu_edit and self.state.edit_target == "MAIN_MODE"
+        mode_value = self._render_main_mode_value(
+            blink_on=blink_on,
+            focused=mode_focused,
+            editing=mode_editing,
+        )
         target_focused = focus_item == "MAIN_TRGT"
         target_editing = self.state.menu_edit and self.state.edit_target == "MAIN_TRGT"
-        active_digit = self.state.gain_edit_step - 1 if target_editing else None
         target_value = self._render_main_target_value(
-            active_digit=active_digit,
             blink_on=blink_on,
             focused=target_focused,
             editing=target_editing,
@@ -266,8 +289,25 @@ class UiController:
         return [
             f"Dia: {self.state.filament_diameter_mm:4.2f} mm",
             f"Spd: {self.state.pulley_speed_mps:4.1f} mm/s",
-            f"M: {self.state.target_mode}  Trgt:{target_value}",
+            f"M:{mode_value} Trgt:{target_value}",
         ]
+
+    def _render_main_mode_value(
+        self,
+        blink_on: bool,
+        focused: bool = False,
+        editing: bool = False,
+    ) -> str:
+        mode = self.state.target_mode
+
+        if editing:
+            inner = mode if blink_on else " " * len(mode)
+            return f"[{inner}]"
+
+        if focused:
+            return self._focused_bracket(mode, blink_on)
+
+        return f" {mode} "
 
     def _render_pid_menu(self) -> list[str]:
         motor_name = self._current_motor_name()
@@ -296,26 +336,36 @@ class UiController:
     
     def _render_fan_menu(self) -> list[str]:
         blink_on = self._blink_on()
-        focused = self._current_focus_item() == "FAN_SPEED" and not self.state.menu_edit
+        fan_editing = self.state.menu_edit and self.state.edit_target == "FAN_SPEED"
+        trg_editing = self.state.menu_edit and self.state.edit_target == "CURRENT_TRG"
+        fan_focused = self._current_focus_item() == "FAN_SPEED" and not self.state.menu_edit
+        trg_focused = self._current_focus_item() == "CURRENT_TRG" and not self.state.menu_edit
 
-        fan_text = f"{self.state.fan_speed_pct}%"
-        width = len(fan_text)
+        fan_value = f"{self.state.fan_speed_pct}%"
+        trg_value = str(int(round(self.state.spool_current_target_ma)))
 
-        if self.state.menu_edit:
-            inner = fan_text if blink_on else " " * width
-            fan_text = f"[{inner}]"
-        elif focused:
-            fan_text = self._focused_bracket(fan_text, blink_on)
-        else:
-            fan_text = f" {fan_text}"
+        def render_slot(value: str, focused: bool, editing: bool) -> str:
+            # Reserve exactly 6 cells total per slot; keep brackets tight around actual value.
+            core_value = value[:4]
+            if editing:
+                inner = core_value if blink_on else " " * len(core_value)
+                return f"[{inner}]".ljust(6)
+            if focused:
+                if blink_on:
+                    return f"[{core_value}]".ljust(6)
+                return f" {core_value}".ljust(6)
+            return f" {core_value}".ljust(6)
 
-        rpm_value = self._fan_speed_rpm()
-        rpm_width = len(str(rpm_value))
-        rpm_text = f"{rpm_value:>{rpm_width}d}"
-        
+        fan_slot = render_slot(fan_value, fan_focused, fan_editing)
+        trg_slot = render_slot(trg_value, trg_focused, trg_editing)
+
+        rpm_text = str(self._fan_speed_rpm())
+        spool_current_text = str(int(round(self.state.spool_current_ma)))
+        fan_line = f"FAN:{fan_slot}RPM: {rpm_text}"
+
         return [
-            f"Fan:{fan_text}",
-            f"RPM: {rpm_text}",
+            fan_line,
+            f"Trg:{trg_slot}Cur: {spool_current_text}",
             "",
     ]
 
@@ -378,22 +428,14 @@ class UiController:
             value = max(0, min(999, self.state.target_speed_tenths))
         return f"{value:03d}"
 
-    def _set_main_target_digits(self, digits: str) -> None:
-        value = int(digits)
+    def _adjust_main_target_value(self, step: int) -> None:
         if self.state.target_mode == "Dia":
-            self.state.target_diameter_hundredths = value
+            self.state.target_diameter_hundredths = max(0, min(999, self.state.target_diameter_hundredths + step))
         else:
-            self.state.target_speed_tenths = value
-
-    def _adjust_main_target_digit(self, digit_index_from_left: int, step: int) -> None:
-        digits = list(self._main_target_digits())
-        current = int(digits[digit_index_from_left])
-        digits[digit_index_from_left] = str((current + step) % 10)
-        self._set_main_target_digits("".join(digits))
+            self.state.target_speed_tenths = max(0, min(999, self.state.target_speed_tenths + step))
 
     def _render_main_target_value(
         self,
-        active_digit: int | None,
         blink_on: bool,
         focused: bool = False,
         editing: bool = False,
@@ -404,11 +446,11 @@ class UiController:
         else:
             rendered = f"{digits[:2]}.{digits[2]}"
 
-        if active_digit is not None:
-            visible = self._blink_digit(rendered, active_digit, blink_on)
-            return f"[{visible}]"
+        if editing:
+            inner = rendered if blink_on else " " * len(rendered)
+            return f"[{inner}]"
 
-        if editing or focused:
+        if focused:
             if blink_on:
                 return f"[{rendered}]"
 

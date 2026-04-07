@@ -21,6 +21,7 @@ class TelemetryFromEsp32:
     filament_speed_mps: float
     fan_rpm: float
     diameter_travelled_mm: float
+    spool_current_ma: float
 
     @classmethod
     def from_json_line(cls, line: str) -> TelemetryFromEsp32:
@@ -33,6 +34,7 @@ class TelemetryFromEsp32:
             filament_speed_mps=float(data.get("filament_speed_mps", 0.0)),
             fan_rpm=float(data.get("fan_rpm", 0.0)),
             diameter_travelled_mm=float(data.get("diameter_travelled_mm", 0.0)),
+            spool_current_ma=float(data.get("spool_current_ma", 0.0)),
         )
 
     def apply_to_controller(self, controller: UiController) -> None:
@@ -41,6 +43,7 @@ class TelemetryFromEsp32:
         state.pulley_speed_mps = self.filament_speed_mps
         state.fan_rpm = self.fan_rpm
         state.diameter_travelled_mm = self.diameter_travelled_mm
+        state.spool_current_ma = self.spool_current_ma
 
 
 @dataclass
@@ -52,6 +55,7 @@ class CommandsToEsp32:
     pid_i_spool: int
     pid_d_spool: int
     fan_speed_pct: int
+    spool_current_target_ma: float
     target_mode: str
     target_diameter_mm: float
     target_speed_mps: float
@@ -67,6 +71,7 @@ class CommandsToEsp32:
             pid_i_spool=state.spool_gains.i.digits,
             pid_d_spool=state.spool_gains.d.digits,
             fan_speed_pct=state.fan_speed_pct,
+            spool_current_target_ma=state.spool_current_target_ma,
             target_mode=state.target_mode,
             target_diameter_mm=state.target_diameter_hundredths / 100.0,
             target_speed_mps=state.target_speed_tenths / 10.0,

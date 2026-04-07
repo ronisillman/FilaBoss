@@ -109,6 +109,7 @@ struct TelemetryFromEsp32 {
     float filament_speed_mps;
     float fan_rpm;
     float diameter_travelled_mm;
+    float spool_current_ma;
 };
 
 struct CommandsToEsp32 {
@@ -119,6 +120,7 @@ struct CommandsToEsp32 {
     float pid_i_spool;
     float pid_d_spool;
     uint8_t fan_speed_pct;
+    float spool_current_target_ma;
     char target_mode[4]; // "Dia" or "Spd"
     float target_diameter_mm;
     float target_speed_mps;
@@ -216,6 +218,7 @@ CommandsToEsp32 raspberryCommands = {
     2500.0f,
     5.0f,
     100,
+    50.0f,
     "Spd",
     1.75f,
     0.01f,
@@ -447,10 +450,6 @@ void loop() {
 /// @brief Print diagnostic information to the serial monitor at a specified interval
 /// @param interval The interval in milliseconds between diagnostic prints
 void diagnose() {
-    Serial.print("Guide position (cm): ");
-    Serial.print(fabs(guidePosition) * 100.0f, 2);
-    Serial.print(", Layer: ");
-    Serial.print(layerNumber);
     Serial.print(", Speed (mm/s): ");
     Serial.print(speed * 1000.0f, 2);
     Serial.print(", Target speed (mm/s): ");
@@ -461,8 +460,6 @@ void diagnose() {
     Serial.print(SetTorqueCurrent, 2);
     Serial.print("Fan RPM: ");
     Serial.print(fanRpm, 1);
-    Serial.print(", Filament distance (cm): ");
-    Serial.print(traveledDistance * 100.0f, 2);
     Serial.println();
 }
 
@@ -1095,6 +1092,7 @@ bool parseRaspberryCommands(const char* line) {
     raspberryCommands.pid_i_spool = doc["pid_i_spool"] | raspberryCommands.pid_i_spool;
     raspberryCommands.pid_d_spool = doc["pid_d_spool"] | raspberryCommands.pid_d_spool;
     raspberryCommands.fan_speed_pct = doc["fan_speed_pct"] | raspberryCommands.fan_speed_pct;
+    raspberryCommands.spool_current_target_ma = doc["spool_current_target_ma"] | raspberryCommands.spool_current_target_ma;
     raspberryCommands.target_diameter_mm = doc["target_diameter_mm"] | raspberryCommands.target_diameter_mm;
     raspberryCommands.target_speed_mps = doc["target_speed_mps"] | raspberryCommands.target_speed_mps;
 
@@ -1110,6 +1108,7 @@ bool parseRaspberryCommands(const char* line) {
 void applyRaspberryCommands() {
     targetSpeed = constrain(raspberryCommands.target_speed_mps, 0.0f, 0.03f);
     setFanDutyPercent((uint8_t)constrain((int)raspberryCommands.fan_speed_pct, 0, 100));
+    SetTorqueCurrent = constrain(raspberryCommands.spool_current_target_ma, 0.0f, 995.0f);
 
     RollerPID.setTunings(
         raspberryCommands.pid_p_pulley,
@@ -1132,14 +1131,16 @@ void sendTelemetryToRaspberry() {
         (loadState != LOAD_IDLE),
         (float)speed,
         (float)fanRpm,
-        (float)(traveledDistance * 1000.0)
+        (float)(traveledDistance * 1000.0),
+        (float)SpoolMotorCurrent
     };
 
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<320> doc;
     doc["load_mode"] = telemetry.load_mode;
     doc["filament_speed_mps"] = telemetry.filament_speed_mps;
     doc["fan_rpm"] = telemetry.fan_rpm;
     doc["diameter_travelled_mm"] = telemetry.diameter_travelled_mm;
+    doc["spool_current_ma"] = telemetry.spool_current_ma;
 
     serializeJson(doc, RaspberrySerial);
     RaspberrySerial.print('\n');
