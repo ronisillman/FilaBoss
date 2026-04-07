@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 @dataclass
 class InputEvent:
-    kind: str  # up | down | select | quit
+    kind: str  # up | down | select | quit | target_dia | target_spd | load_toggle
 
 
 class RotaryButtonInput:

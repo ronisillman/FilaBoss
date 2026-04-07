@@ -87,6 +87,14 @@ source .venv/bin/activate
 python3 main.py --mode hw --i2c-address 0x27
 ```
 
+To enable ESP32 JSON serial communication in hardware mode:
+
+```bash
+python3 main.py --mode hw --i2c-address 0x27 --serial-port /dev/ttyUSB0 --serial-baudrate 115200
+```
+
+Serial communication is newline-delimited JSON in both directions.
+
 In hardware mode, the program prints a small terminal heartbeat once per second so you can confirm the loop is running.
 
 ## Pages included

@@ -16,6 +16,12 @@ class SimulatedLcdDisplay(DisplayBackend):
         self._open = True
         self._events: deque[InputEvent] = deque()
         self._buffer = [" " * self.cols for _ in range(self.rows)]
+        self._cell_width = 22
+        self._cell_height = 26
+        self._cell_gap = 3
+        self._cell_outline = "#447e4e"
+        self._cell_fill = "#18341f"
+        self._cell_text = "#a8ffb5"
 
         self._root = tk.Tk()
         self._root.title(f"LCD Simulator ({cols}x{rows})")
@@ -24,7 +30,7 @@ class SimulatedLcdDisplay(DisplayBackend):
 
         instruction = tk.Label(
             self._root,
-            text="Controls: Left=up, Right=down, Up=down, Down=up, Space/Enter=select, Esc=Quit",
+            text="Controls: Left=up, Right=down, Up=down, Down=up, Space/Enter=select, D=Target Dia, S=Target Spd, L=Toggle Load Mode, Esc=Quit",
             fg="#b8ffc9",
             bg="#0b140e",
             font=("Consolas", 10),
@@ -36,19 +42,43 @@ class SimulatedLcdDisplay(DisplayBackend):
         frame = tk.Frame(self._root, bg="#1d4f2b", bd=4, relief="ridge")
         frame.pack(padx=10, pady=(2, 10), fill="both", expand=True)
 
-        self._line_labels: list[tk.Label] = []
-        for _ in range(self.rows):
-            lbl = tk.Label(
-                frame,
-                text=" " * self.cols,
-                fg="#93f59f",
-                bg="#1d4f2b",
-                font=("Consolas", 16, "bold"),
-                anchor="w",
-                width=self.cols,
-            )
-            lbl.pack(padx=8, pady=2, anchor="w")
-            self._line_labels.append(lbl)
+        canvas_width = self.cols * self._cell_width + (self.cols + 1) * self._cell_gap
+        canvas_height = self.rows * self._cell_height + (self.rows + 1) * self._cell_gap
+        self._canvas = tk.Canvas(
+            frame,
+            width=canvas_width,
+            height=canvas_height,
+            bg="#1d4f2b",
+            highlightthickness=0,
+        )
+        self._canvas.pack(padx=8, pady=8)
+
+        self._cell_items: list[list[tuple[int, int]]] = []
+        for row in range(self.rows):
+            row_items: list[tuple[int, int]] = []
+            for col in range(self.cols):
+                x1 = self._cell_gap + col * (self._cell_width + self._cell_gap)
+                y1 = self._cell_gap + row * (self._cell_height + self._cell_gap)
+                x2 = x1 + self._cell_width
+                y2 = y1 + self._cell_height
+                rect_id = self._canvas.create_rectangle(
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    outline=self._cell_outline,
+                    fill=self._cell_fill,
+                    width=2,
+                )
+                text_id = self._canvas.create_text(
+                    (x1 + x2) / 2,
+                    (y1 + y2) / 2,
+                    text=" ",
+                    fill=self._cell_text,
+                    font=("Consolas", 15, "bold"),
+                )
+                row_items.append((rect_id, text_id))
+            self._cell_items.append(row_items)
 
         self._root.bind("<Up>", lambda _e: self._events.append(InputEvent("down")))
         self._root.bind("<Left>", lambda _e: self._events.append(InputEvent("up")))
@@ -56,6 +86,12 @@ class SimulatedLcdDisplay(DisplayBackend):
         self._root.bind("<Right>", lambda _e: self._events.append(InputEvent("down")))
         self._root.bind("<space>", lambda _e: self._events.append(InputEvent("select")))
         self._root.bind("<Return>", lambda _e: self._events.append(InputEvent("select")))
+        self._root.bind("<d>", lambda _e: self._events.append(InputEvent("target_dia")))
+        self._root.bind("<D>", lambda _e: self._events.append(InputEvent("target_dia")))
+        self._root.bind("<s>", lambda _e: self._events.append(InputEvent("target_spd")))
+        self._root.bind("<S>", lambda _e: self._events.append(InputEvent("target_spd")))
+        self._root.bind("<l>", lambda _e: self._events.append(InputEvent("load_toggle")))
+        self._root.bind("<L>", lambda _e: self._events.append(InputEvent("load_toggle")))
         self._root.bind("<Escape>", lambda _e: self._events.append(InputEvent("quit")))
 
         self._root.focus_force()
@@ -85,8 +121,8 @@ class SimulatedLcdDisplay(DisplayBackend):
 
     def clear(self) -> None:
         self._buffer = [" " * self.cols for _ in range(self.rows)]
-        for i, line in enumerate(self._buffer):
-            self._line_labels[i].configure(text=line)
+        for row, line in enumerate(self._buffer):
+            self._render_row(row, line)
 
     def write_line(self, row: int, text: str) -> None:
         if row < 0 or row >= self.rows:
@@ -95,7 +131,13 @@ class SimulatedLcdDisplay(DisplayBackend):
         if rendered == self._buffer[row]:
             return
         self._buffer[row] = rendered
-        self._line_labels[row].configure(text=rendered)
+        self._render_row(row, rendered)
+
+    def _render_row(self, row: int, text: str) -> None:
+        cell_row = self._cell_items[row]
+        for col, char in enumerate(text):
+            _, text_id = cell_row[col]
+            self._canvas.itemconfigure(text_id, text=char)
 
     def close(self) -> None:
         self._open = False
