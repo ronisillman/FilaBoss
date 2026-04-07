@@ -180,6 +180,9 @@ def main() -> None:
         frame_delay = 1.0 / max(1.0, args.fps)
         tx_period = 1.0 / max(1.0, args.serial_tx_hz)
         next_tx_time = time.monotonic()
+        telemetry_apply_period = 1.0
+        next_telemetry_apply_time = time.monotonic()
+        pending_telemetry: TelemetryFromEsp32 | None = None
         running = True
 
         while running:
@@ -193,20 +196,21 @@ def main() -> None:
                 events = input_device.poll_events()
 
             if args.mode == "hw" and serial_bridge is not None:
-                latest_telemetry: TelemetryFromEsp32 | None = None
                 while True:
                     telemetry_line = serial_bridge.read_line()
                     if telemetry_line is None:
                         break
 
                     try:
-                        latest_telemetry = TelemetryFromEsp32.from_json_line(telemetry_line)
+                        pending_telemetry = TelemetryFromEsp32.from_json_line(telemetry_line)
                     except (ValueError, json.JSONDecodeError):
                         # Ignore malformed telemetry lines and keep last valid state.
                         pass
 
-                if latest_telemetry is not None:
-                    latest_telemetry.apply_to_controller(controller)
+                now = time.monotonic()
+                if now >= next_telemetry_apply_time and pending_telemetry is not None:
+                    pending_telemetry.apply_to_controller(controller)
+                    next_telemetry_apply_time = now + telemetry_apply_period
 
             for event in events:
                 if not controller.handle_event(event):
