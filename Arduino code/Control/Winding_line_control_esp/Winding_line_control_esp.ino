@@ -50,7 +50,7 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 #define stepsPerRev 200.0 // full steps per revolution (NEMA17)
 const float microsteps = 16.0f; // microsteps per full step
 
-const uint16_t GUIDE_TMC_RUN_CURRENT_MA = 1000;
+const uint16_t GUIDE_TMC_RUN_CURRENT_MA = 750;
 const uint16_t GUIDE_TMC_HOLD_CURRENT_MA = 200;
 const uint16_t GUIDE_TMC_MICROSTEPS = (uint16_t)(microsteps + 0.5f);
 const float GUIDE_TMC_R_SENSE = 0.11f;
@@ -206,7 +206,7 @@ unsigned long lastDistanceUpdateMs = 0;
 char serialInputBuffer[64];
 uint8_t serialInputIndex = 0;
 
-char raspberrySerialBuffer[256];
+char raspberrySerialBuffer[384];
 uint16_t raspberrySerialIndex = 0;
 unsigned long lastRaspberryCommandMs = 0;
 
@@ -1077,8 +1077,24 @@ void processRaspberryJsonLine(const char* line) {
 }
 
 bool parseRaspberryCommands(const char* line) {
+    // Robust framing: parse only the JSON object portion in case a noisy line contains extra chars.
+    const char* jsonStart = strchr(line, '{');
+    const char* jsonEnd = strrchr(line, '}');
+    if (jsonStart == nullptr || jsonEnd == nullptr || jsonEnd < jsonStart) {
+        return false;
+    }
+
+    size_t jsonLen = (size_t)(jsonEnd - jsonStart + 1);
+    if (jsonLen == 0 || jsonLen >= 512) {
+        return false;
+    }
+
+    char jsonPayload[512];
+    memcpy(jsonPayload, jsonStart, jsonLen);
+    jsonPayload[jsonLen] = '\0';
+
     StaticJsonDocument<512> doc;
-    DeserializationError error = deserializeJson(doc, line);
+    DeserializationError error = deserializeJson(doc, jsonPayload);
     if (error) {
         Serial.print("WARN: Raspberry JSON parse failed: ");
         Serial.println(error.c_str());
