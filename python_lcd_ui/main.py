@@ -40,7 +40,8 @@ class TelemetryFromEsp32:
     def apply_to_controller(self, controller: UiController) -> None:
         state = controller.state
         state.load_mode = self.load_mode
-        state.pulley_speed_mps = self.filament_speed_mps
+        # ESP sends m/s, UI displays mm/s.
+        state.pulley_speed_mps = self.filament_speed_mps * 1000.0
         state.fan_rpm = self.fan_rpm
         state.diameter_travelled_mm = self.diameter_travelled_mm
         state.spool_current_ma = self.spool_current_ma
@@ -74,7 +75,8 @@ class CommandsToEsp32:
             spool_current_target_ma=state.spool_current_target_ma,
             target_mode=state.target_mode,
             target_diameter_mm=state.target_diameter_hundredths / 100.0,
-            target_speed_mps=state.target_speed_tenths / 10.0,
+            # UI target is in mm/s with one decimal (e.g. 00.1), convert to m/s for ESP.
+            target_speed_mps=state.target_speed_tenths / 10000.0,
         )
 
     def to_json_line(self) -> str:

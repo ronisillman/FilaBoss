@@ -29,13 +29,13 @@ class AppState:
     gain_edit_step: int = 0
     filament_speed_mpm: float = 12.0
     filament_diameter_mm: float = 1.75
-    fan_speed_pct: int = 35
+    fan_speed_pct: int = 100
     fan_rpm: float = 700.0
     spool_current_ma: float = 0.0
-    spool_current_target_ma: float = 500.0
-    target_mode: str = "Dia"
+    spool_current_target_ma: float = 50.0
+    target_mode: str = "Spd"
     target_diameter_hundredths: int = 175
-    target_speed_tenths: int = 120
+    target_speed_tenths: int = 100
     load_mode: bool = False
     pulley_speed_mps: float = 10.0
     diameter_travelled_mm: float = 0.0
