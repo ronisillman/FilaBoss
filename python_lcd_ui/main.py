@@ -208,7 +208,7 @@ def main() -> None:
                     running = False
                     break
 
-            use_simulated_feedback = not (args.mode == "hw" and serial_bridge is not None)
+            use_simulated_feedback = (args.mode == "sim")
             controller.tick(simulate_feedback=use_simulated_feedback)
 
             if args.mode == "hw" and serial_bridge is not None:
