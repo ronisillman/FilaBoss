@@ -97,6 +97,11 @@ class SerialJsonBridge:
         self._rx_buffer = ""
 
     def read_line(self) -> str | None:
+        # Always consume already-buffered complete lines first.
+        if "\n" in self._rx_buffer:
+            line, self._rx_buffer = self._rx_buffer.split("\n", 1)
+            return line.strip()
+
         waiting = int(self._serial.in_waiting)
         if waiting <= 0:
             return None
