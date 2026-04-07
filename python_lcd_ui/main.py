@@ -188,14 +188,20 @@ def main() -> None:
                 events = input_device.poll_events()
 
             if args.mode == "hw" and serial_bridge is not None:
-                telemetry_line = serial_bridge.read_line()
-                if telemetry_line:
+                latest_telemetry: TelemetryFromEsp32 | None = None
+                while True:
+                    telemetry_line = serial_bridge.read_line()
+                    if telemetry_line is None:
+                        break
+
                     try:
-                        telemetry = TelemetryFromEsp32.from_json_line(telemetry_line)
-                        telemetry.apply_to_controller(controller)
+                        latest_telemetry = TelemetryFromEsp32.from_json_line(telemetry_line)
                     except (ValueError, json.JSONDecodeError):
                         # Ignore malformed telemetry lines and keep last valid state.
                         pass
+
+                if latest_telemetry is not None:
+                    latest_telemetry.apply_to_controller(controller)
 
             for event in events:
                 if not controller.handle_event(event):

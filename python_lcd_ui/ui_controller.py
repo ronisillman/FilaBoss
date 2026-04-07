@@ -360,7 +360,7 @@ class UiController:
         trg_slot = render_slot(trg_value, trg_focused, trg_editing)
 
         rpm_text = str(self._fan_speed_rpm())
-        spool_current_text = str(int(round(self.state.spool_current_ma)))
+        spool_current_text = f"{self.state.spool_current_ma:.1f}"
         fan_line = f"FAN:{fan_slot}RPM: {rpm_text}"
 
         return [
