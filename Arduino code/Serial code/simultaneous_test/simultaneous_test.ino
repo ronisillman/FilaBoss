@@ -1,23 +1,22 @@
 int counter = 1;
 
 void setup() {
-  Serial.begin(115200); // USB or GPIO UART
+    Serial.begin(115200); 
+    Serial2.begin(115200, SERIAL_8N1, 25, 26);
 }
 
 void loop() {
-  // Send message
-  Serial.print("Hello ESP ");
-  Serial.println(counter);
-
   // Read incoming messages and print them
-  while (Serial.available()) {
-    String msg = Serial.readStringUntil('\n');
+  while (Serial2.available()) {
+    String msg = Serial2.readStringUntil('\n');
     msg.trim();
     if (msg.length() > 0) {
       Serial.println("Received: " + msg);
     }
   }
 
+  Serial2.print("Hello Pi ");
+  Serial2.println(counter);
   counter++;
   delay(1000);
 }
