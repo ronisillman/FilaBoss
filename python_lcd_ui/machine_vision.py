@@ -180,6 +180,7 @@ def setup_csv():
 
 csv_file, csv_writer = setup_csv()
 last_log_time = time.time()
+last_socket_send_time = time.time()
 
 
 # -----------------------------
@@ -326,7 +327,10 @@ while True:
                 csv_file.flush()
                 print("CSV: data logged")
 
-                
+                last_log_time = current_time
+
+            if current_time - last_socket_send_time >= 0.5:
+                timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
                 payload = {
                     "timestamp": timestamp,
                     "top_mm": round(diameters[0], 3),
@@ -343,6 +347,7 @@ while True:
                     if socket_connected:
                         vision_socket.sendall(data_line.encode("utf-8"))
                         print("Socket: data sent")
+                        last_socket_send_time = current_time
                 except OSError as e:
                     print(f"Socket send error: {e}")
                     socket_connected = False
@@ -351,8 +356,6 @@ while True:
                     except OSError:
                         pass
                     vision_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-
-                last_log_time = current_time
 
             cv2.putText(
                 frame,
