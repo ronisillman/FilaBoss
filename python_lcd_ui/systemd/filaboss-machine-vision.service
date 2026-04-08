@@ -1,0 +1,18 @@
+[Unit]
+Description=FilaBoss Machine Vision Sender
+After=filaboss-ui.service
+Requires=filaboss-ui.service
+
+[Service]
+Type=simple
+User=filaboss
+Group=filaboss
+WorkingDirectory=/home/filaboss/FilaBoss/python_lcd_ui
+ExecStart=/home/filaboss/FilaBoss/python_lcd_ui/.venv/bin/python3 /home/filaboss/FilaBoss/python_lcd_ui/machine_vision.py
+Restart=always
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
