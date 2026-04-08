@@ -260,7 +260,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--serial-port", type=str, default="/dev/ttyUSB0")
     parser.add_argument("--serial-baudrate", type=int, default=115200)
     parser.add_argument("--serial-tx-hz", type=float, default=20.0)
-    parser.add_argument("--unix-socket-path", type=str, default="/tmp/filament_socket")
+    parser.add_argument("--unix-socket-path", type=str, default="/sockets/filament_socket.sock")
 
     parser.add_argument("--fps", type=float, default=12.0)
     return parser.parse_args()

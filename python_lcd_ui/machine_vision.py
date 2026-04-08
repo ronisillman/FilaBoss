@@ -11,7 +11,7 @@ import time
 import socket
 
 # Socket setup
-SOCKET_PATH = "/tmp/filament_socket"
+SOCKET_PATH = "/sockets/filament_socket.sock"
 vision_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
 
