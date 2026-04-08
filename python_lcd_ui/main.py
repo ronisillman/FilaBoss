@@ -372,7 +372,7 @@ def main() -> None:
                 # Show startup prompt until ESP reports normal operation.
                 controller.state.waiting_for_load = True
 
-        if args.unix_socket_path:
+        if args.mode == "hw" and args.unix_socket_path:
             unix_bridge = UnixJsonBridge(args.unix_socket_path)
             controller.state.waiting_for_load = False
 
