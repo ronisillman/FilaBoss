@@ -3,6 +3,7 @@ from __future__ import annotations
 # pyright: reportMissingImports=false
 
 import argparse
+import csv
 import importlib
 import json
 import os
@@ -249,6 +250,60 @@ class UnixJsonBridge:
             os.remove(self._socket_path)
 
 
+class CsvMeasurementLogger:
+    """Append diameter measurements to CSV from the UI runtime."""
+
+    def __init__(self, file_path: str) -> None:
+        self._file = open(file_path, "w", newline="")
+        self._writer = csv.writer(self._file)
+        self._writer.writerow([
+            "Timestamp",
+            "Distance_mm",
+            "Top_mm",
+            "Middle_mm",
+            "Bottom_mm",
+            "Roundness",
+        ])
+        self._file.flush()
+
+    def write_row(self, timestamp: str, distance_mm: float, top_mm: float, middle_mm: float, bottom_mm: float, roundness: float | None) -> None:
+        self._writer.writerow([
+            timestamp,
+            round(distance_mm, 3),
+            round(top_mm, 3),
+            round(middle_mm, 3),
+            round(bottom_mm, 3),
+            "" if roundness is None else round(roundness, 3),
+        ])
+        self._file.flush()
+
+    def close(self) -> None:
+        self._file.close()
+
+
+def session_csv_log_path(base_path: str, started_at: float) -> str:
+    directory = os.path.dirname(base_path)
+    filename = os.path.basename(base_path)
+    stem, ext = os.path.splitext(filename)
+    if not ext:
+        ext = ".csv"
+    if not stem:
+        stem = "filament_log"
+
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+
+    ts = time.strftime("%Y%m%d_%H%M%S", time.localtime(started_at))
+    return os.path.join(directory, f"{stem}_{ts}{ext}") if directory else f"{stem}_{ts}{ext}"
+
+
+def default_csv_log_path() -> str:
+    usb_path = "/home/filaboss/usb"
+    if os.path.isdir(usb_path):
+        return os.path.join(usb_path, "filament_log.csv")
+    return os.path.join(os.path.expanduser("~"), "filament_log.csv")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="FilaBoss LCD UI (simulator and Raspberry Pi hardware modes)"
@@ -268,6 +323,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--serial-baudrate", type=int, default=115200)
     parser.add_argument("--serial-tx-hz", type=float, default=20.0)
     parser.add_argument("--unix-socket-path", type=str, default=DEFAULT_UNIX_SOCKET_PATH)
+    parser.add_argument("--csv-log-path", type=str, default=default_csv_log_path())
+    parser.add_argument("--csv-log-interval", type=float, default=5.0)
 
     parser.add_argument("--fps", type=float, default=12.0)
     return parser.parse_args()
@@ -281,6 +338,7 @@ def main() -> None:
     input_device = None
     serial_bridge: SerialJsonBridge | None = None
     unix_bridge: UnixJsonBridge | None = None
+    csv_logger: CsvMeasurementLogger | None = None
 
     try:
         if args.mode == "sim":
@@ -315,8 +373,12 @@ def main() -> None:
         next_tx_time = time.monotonic()
         telemetry_apply_period = 1.0
         next_telemetry_apply_time = time.monotonic()
+        csv_log_interval = max(0.1, float(args.csv_log_interval))
+        next_csv_log_time = time.monotonic()
         pending_esp_telemetry: TelemetryFromEsp32 | None = None
         pending_diameter: DiameterFromVision | None = None
+        last_diameter_for_csv: DiameterFromVision | None = None
+        last_load_mode = controller.state.load_mode
         running = True
 
         while running:
@@ -349,6 +411,7 @@ def main() -> None:
 
                     try:
                         pending_diameter = DiameterFromVision.from_json_line(telemetry_line)
+                        last_diameter_for_csv = pending_diameter
                     except (ValueError, json.JSONDecodeError):
                         # Ignore malformed telemetry lines and keep last valid state.
                         pass
@@ -365,6 +428,36 @@ def main() -> None:
                 if not controller.handle_event(event):
                     running = False
                     break
+
+            # Load mode transition handling for CSV sessions.
+            load_mode = controller.state.load_mode
+            if last_load_mode and not load_mode:
+                if args.csv_log_path:
+                    session_path = session_csv_log_path(args.csv_log_path, time.time())
+                    csv_logger = CsvMeasurementLogger(session_path)
+                    next_csv_log_time = time.monotonic() + csv_log_interval
+            elif (not last_load_mode) and load_mode:
+                if csv_logger is not None:
+                    csv_logger.close()
+                    csv_logger = None
+
+            last_load_mode = load_mode
+
+            now = time.monotonic()
+            if now >= next_csv_log_time and csv_logger is not None and last_diameter_for_csv is not None:
+                csv_timestamp = last_diameter_for_csv.timestamp
+                if csv_timestamp is None:
+                    csv_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+
+                csv_logger.write_row(
+                    timestamp=csv_timestamp,
+                    distance_mm=controller.state.diameter_travelled_mm,
+                    top_mm=last_diameter_for_csv.top_mm,
+                    middle_mm=last_diameter_for_csv.middle_mm,
+                    bottom_mm=last_diameter_for_csv.bottom_mm,
+                    roundness=last_diameter_for_csv.roundness,
+                )
+                next_csv_log_time = now + csv_log_interval
 
             use_simulated_feedback = (args.mode == "sim" and serial_bridge is None and unix_bridge is None) # change this if needed *****
             controller.tick(simulate_feedback=use_simulated_feedback)
@@ -385,6 +478,8 @@ def main() -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        if csv_logger is not None:
+            csv_logger.close()
         if unix_bridge is not None:
             unix_bridge.close()
         if serial_bridge is not None:

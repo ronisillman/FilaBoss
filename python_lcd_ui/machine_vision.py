@@ -5,7 +5,6 @@ import numpy as np
 import json
 from collections import deque
 import os
-import csv
 import time
 
 import socket
@@ -136,50 +135,6 @@ def save_calibration(lens_position, rois, mm_per_pixel, calibration_locked):
 lens_position, rois, mm_per_pixel, calibration_locked = load_settings()
 roi_names = ["Top", "Middle", "Bottom"]
 
-# -----------------------------
-# CSV LOGGING SETUP
-# -----------------------------
-
-def setup_csv():
-    """
-    Sets up the CSV file for logging filament measurements.
-    Logs are written to the USB symlink at /home/filaboss/usb.
-    Overwrites the file each time the program starts.
-    """
-
-    # Use the symlink to the USB
-    usb_path = "/home/filaboss/usb"
-
-    # Check if USB is mounted and accessible
-    if os.path.isdir(usb_path):
-        base_path = usb_path
-        print(f"USB detected. Logging to: {base_path}")
-    else:
-        base_path = os.path.expanduser("~")
-        print(f"USB not found. Logging to home folder: {base_path}")
-
-    # Full path to the CSV file
-    file_path = os.path.join(base_path, "filament_log.csv")
-
-    # Open the CSV file in write mode to overwrite on each start
-    csv_file = open(file_path, "w", newline="")
-    csv_writer = csv.writer(csv_file)
-
-    # Write the header
-    csv_writer.writerow([
-        "Timestamp",
-        "Top_mm",
-        "Middle_mm",
-        "Bottom_mm",
-        "Roundness"
-    ])
-    csv_file.flush()  # Ensure header is written immediately
-
-    print(f"CSV logging ready: {file_path}")
-    return csv_file, csv_writer
-
-csv_file, csv_writer = setup_csv()
-last_log_time = time.time()
 last_socket_send_time = time.time()
 
 
@@ -308,26 +263,7 @@ while True:
 
             roundness_index = (d_max - d_min) / d_mean
             
-                    # -----------------------------
-            # CSV LOGGING (every 5 seconds)
-            # -----------------------------
             current_time = time.time()
-
-            if current_time - last_log_time >= 5:
-                timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-
-                csv_writer.writerow([
-                    timestamp,
-                    round(diameters[0], 3),
-                    round(diameters[1], 3),
-                    round(diameters[2], 3),
-                    round(roundness_index, 3)
-                ])
-
-                csv_file.flush()
-                print("CSV: data logged")
-
-                last_log_time = current_time
 
             if current_time - last_socket_send_time >= 0.5:
                 timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -408,6 +344,5 @@ while True:
 
 
 picam2.stop()
-csv_file.close()
 cv2.destroyAllWindows()
 vision_socket.close()
