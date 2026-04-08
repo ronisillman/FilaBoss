@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import os
+import socket
 import time
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -48,6 +50,41 @@ class TelemetryFromEsp32:
         state.fan_rpm = self.fan_rpm
         state.diameter_travelled_mm = self.diameter_travelled_mm
         state.spool_current_ma = self.spool_current_ma
+
+
+@dataclass
+class DiameterFromVision:
+    timestamp: float | None
+    top_mm: float
+    middle_mm: float
+    bottom_mm: float
+    roundness: float | None
+
+    @classmethod
+    def from_json_line(cls, line: str) -> DiameterFromVision:
+        data = json.loads(line)
+        if not isinstance(data, dict):
+            raise ValueError("Diameter JSON must be an object")
+
+        def parse_optional_float(value: Any) -> float | None:
+            if value is None:
+                return None
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return None
+
+        return cls(
+            timestamp=parse_optional_float(data.get("timestamp")),
+            top_mm=float(data["top_mm"]),
+            middle_mm=float(data["middle_mm"]),
+            bottom_mm=float(data["bottom_mm"]),
+            roundness=parse_optional_float(data.get("roundness")),
+        )
+
+    def apply_to_controller(self, controller: UiController) -> None:
+        mean_diameter_mm = (self.top_mm + self.middle_mm + self.bottom_mm) / 3.0
+        controller.state.filament_diameter_mm = round(mean_diameter_mm, 3)
 
 
 @dataclass
@@ -127,6 +164,78 @@ class SerialJsonBridge:
         self._serial.close()
 
 
+class UnixJsonBridge:
+    """Newline-delimited JSON bridge over a local Unix domain socket."""
+
+    def __init__(self, socket_path: str) -> None:
+        if not hasattr(socket, "AF_UNIX"):
+            raise RuntimeError("Unix domain sockets are not supported on this platform")
+
+        self._socket_path = socket_path
+        self._server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self._client: socket.socket | None = None
+        self._rx_buffer = ""
+
+        if os.path.exists(self._socket_path):
+            os.remove(self._socket_path)
+
+        self._server.bind(self._socket_path)
+        self._server.listen(1)
+        self._server.setblocking(False)
+
+    def _accept_client_if_needed(self) -> None:
+        if self._client is not None:
+            return
+
+        try:
+            conn, _ = self._server.accept()
+        except BlockingIOError:
+            return
+
+        conn.setblocking(False)
+        self._client = conn
+
+    def _drop_client(self) -> None:
+        if self._client is not None:
+            self._client.close()
+            self._client = None
+        self._rx_buffer = ""
+
+    def read_line(self) -> str | None:
+        if "\n" in self._rx_buffer:
+            line, self._rx_buffer = self._rx_buffer.split("\n", 1)
+            return line.strip()
+
+        self._accept_client_if_needed()
+        if self._client is None:
+            return None
+
+        try:
+            chunk = self._client.recv(4096)
+        except BlockingIOError:
+            return None
+        except OSError:
+            self._drop_client()
+            return None
+
+        if not chunk:
+            self._drop_client()
+            return None
+
+        self._rx_buffer += chunk.decode("utf-8", errors="replace")
+        if "\n" not in self._rx_buffer:
+            return None
+
+        line, self._rx_buffer = self._rx_buffer.split("\n", 1)
+        return line.strip()
+
+    def close(self) -> None:
+        self._drop_client()
+        self._server.close()
+        if os.path.exists(self._socket_path):
+            os.remove(self._socket_path)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="FilaBoss LCD UI (simulator and Raspberry Pi hardware modes)"
@@ -142,9 +251,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pin-dt", type=int, default=27)
     parser.add_argument("--pin-sw", type=int, default=22)
 
-    parser.add_argument("--serial-port", type=str, default="")
+    parser.add_argument("--serial-port", type=str, default="/dev/ttyUSB0")
     parser.add_argument("--serial-baudrate", type=int, default=115200)
     parser.add_argument("--serial-tx-hz", type=float, default=20.0)
+    parser.add_argument("--unix-socket-path", type=str, default="/tmp/filament_socket")
 
     parser.add_argument("--fps", type=float, default=12.0)
     return parser.parse_args()
@@ -157,6 +267,7 @@ def main() -> None:
     display = None
     input_device = None
     serial_bridge: SerialJsonBridge | None = None
+    unix_bridge: UnixJsonBridge | None = None
 
     try:
         if args.mode == "sim":
@@ -182,12 +293,17 @@ def main() -> None:
                 # Show startup prompt until ESP reports normal operation.
                 controller.state.waiting_for_load = True
 
+        if args.unix_socket_path:
+            unix_bridge = UnixJsonBridge(args.unix_socket_path)
+            controller.state.waiting_for_load = False
+
         frame_delay = 1.0 / max(1.0, args.fps)
         tx_period = 1.0 / max(1.0, args.serial_tx_hz)
         next_tx_time = time.monotonic()
         telemetry_apply_period = 1.0
         next_telemetry_apply_time = time.monotonic()
-        pending_telemetry: TelemetryFromEsp32 | None = None
+        pending_esp_telemetry: TelemetryFromEsp32 | None = None
+        pending_diameter: DiameterFromVision | None = None
         running = True
 
         while running:
@@ -207,15 +323,30 @@ def main() -> None:
                         break
 
                     try:
-                        pending_telemetry = TelemetryFromEsp32.from_json_line(telemetry_line)
+                        pending_esp_telemetry = TelemetryFromEsp32.from_json_line(telemetry_line)
                     except (ValueError, json.JSONDecodeError):
                         # Ignore malformed telemetry lines and keep last valid state.
                         pass
 
-                now = time.monotonic()
-                if now >= next_telemetry_apply_time and pending_telemetry is not None:
-                    pending_telemetry.apply_to_controller(controller)
-                    next_telemetry_apply_time = now + telemetry_apply_period
+            if unix_bridge is not None:
+                while True:
+                    telemetry_line = unix_bridge.read_line()
+                    if telemetry_line is None:
+                        break
+
+                    try:
+                        pending_diameter = DiameterFromVision.from_json_line(telemetry_line)
+                    except (ValueError, json.JSONDecodeError):
+                        # Ignore malformed telemetry lines and keep last valid state.
+                        pass
+
+            now = time.monotonic()
+            if now >= next_telemetry_apply_time:
+                if pending_esp_telemetry is not None:
+                    pending_esp_telemetry.apply_to_controller(controller)
+                if pending_diameter is not None:
+                    pending_diameter.apply_to_controller(controller)
+                next_telemetry_apply_time = now + telemetry_apply_period
 
             for event in events:
                 if not controller.handle_event(event):
@@ -241,6 +372,8 @@ def main() -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        if unix_bridge is not None:
+            unix_bridge.close()
         if serial_bridge is not None:
             serial_bridge.close()
         if input_device is not None:

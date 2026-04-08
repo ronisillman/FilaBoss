@@ -5,6 +5,11 @@ This starter project gives you one UI codebase with two backends:
 - Simulator backend on laptop (arrow keys + space)
 - Hardware backend on Raspberry Pi 5 (I2C LCD + rotary encoder button)
 
+The hardware runtime can now consume two independent JSON inputs:
+
+- ESP32 serial telemetry/commands (newline-delimited JSON over serial)
+- Vision diameter feed (newline-delimited JSON over a local Unix domain socket)
+
 ## Hardware target
 
 - LCD: 2004A (20x4 character display)
@@ -95,6 +100,41 @@ python3 main.py --mode hw --i2c-address 0x27 --serial-port /dev/ttyUSB0 --serial
 
 Serial communication is newline-delimited JSON in both directions.
 
+To enable local vision diameter input over Unix socket (same Raspberry Pi):
+
+```bash
+python3 main.py --mode hw --i2c-address 0x27 --unix-socket-path /tmp/filament_socket
+```
+
+Default runtime values in the current code:
+
+- `--serial-port` defaults to `/dev/ttyUSB0`
+- `--unix-socket-path` defaults to `/tmp/filament_socket`
+
+If you want to disable one channel explicitly:
+
+```bash
+# Disable serial bridge
+python3 main.py --mode hw --serial-port ""
+
+# Disable Unix socket bridge
+python3 main.py --mode hw --unix-socket-path ""
+```
+
+Vision socket payload format (one JSON object per line):
+
+```json
+{"timestamp":1712563200.123,"top_mm":1.750,"middle_mm":1.748,"bottom_mm":1.752,"roundness":0.0023}
+```
+
+Required keys for diameter update are:
+
+- `top_mm`
+- `middle_mm`
+- `bottom_mm`
+
+The UI computes `Dia` as the mean of these three values and shows it with three decimals.
+
 In hardware mode, the program prints a small terminal heartbeat once per second so you can confirm the loop is running.
 
 ## Pages included
@@ -112,3 +152,8 @@ These are sample pages to help you plug in your real control values later.
 - `display_simulator.py`: desktop LCD simulator
 - `display_hardware.py`: RPLCD hardware driver
 - `input_devices.py`: rotary button input reader
+
+Key data models in `main.py`:
+
+- `TelemetryFromEsp32`: serial telemetry from ESP32
+- `DiameterFromVision`: Unix socket payload from local vision process
