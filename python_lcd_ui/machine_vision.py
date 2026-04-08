@@ -12,15 +12,20 @@ import socket
 
 # Socket setup
 SOCKET_PATH = "/tmp/filament_socket"
+vision_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
-# Remove existing socket if present
-if os.path.exists(SOCKET_PATH):
-    os.remove(SOCKET_PATH)
 
-server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-server_socket.bind(SOCKET_PATH)
+def connect_socket() -> bool:
+    try:
+        vision_socket.connect(SOCKET_PATH)
+        print(f"Connected to UI socket at {SOCKET_PATH}")
+        return True
+    except OSError as e:
+        print(f"Socket connect error: {e}")
+        return False
 
-print(f"Socket ready at {SOCKET_PATH}")
+
+socket_connected = connect_socket()
 
 
 
@@ -318,18 +323,30 @@ while True:
                 print("CSV: data logged")
 
                 
+                payload = {
+                    "timestamp": timestamp,
+                    "top_mm": round(diameters[0], 3),
+                    "middle_mm": round(diameters[1], 3),
+                    "bottom_mm": round(diameters[2], 3),
+                    "roundness": round(roundness_index, 3)
+                }
+
+                data_line = json.dumps(payload, separators=(",", ":")) + "\n"
                 try:
-                    data_str = json.dumps({
-                        "timestamp": timestamp,
-                        "top_mm": round(diameters[0], 3),
-                        "middle_mm": round(diameters[1], 3),
-                        "bottom_mm": round(diameters[2], 3),
-                        "roundness": round(roundness_index, 3)
-                    })
-                    server_socket.sendto(data_str.encode("utf-8"), SOCKET_PATH)
-                    print("Socket: data sent")
-                except Exception as e:
+                    if not socket_connected:
+                        socket_connected = connect_socket()
+
+                    if socket_connected:
+                        vision_socket.sendall(data_line.encode("utf-8"))
+                        print("Socket: data sent")
+                except OSError as e:
                     print(f"Socket send error: {e}")
+                    socket_connected = False
+                    try:
+                        vision_socket.close()
+                    except OSError:
+                        pass
+                    vision_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
                 last_log_time = current_time
 
@@ -386,6 +403,4 @@ while True:
 picam2.stop()
 csv_file.close()
 cv2.destroyAllWindows()
-server_socket.close()
-if os.path.exists(SOCKET_PATH):
-    os.remove(SOCKET_PATH)
+vision_socket.close()

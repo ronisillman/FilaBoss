@@ -54,7 +54,7 @@ class TelemetryFromEsp32:
 
 @dataclass
 class DiameterFromVision:
-    timestamp: float | None
+    timestamp: str | None
     top_mm: float
     middle_mm: float
     bottom_mm: float
@@ -74,8 +74,14 @@ class DiameterFromVision:
             except (TypeError, ValueError):
                 return None
 
+        def parse_optional_timestamp(value: Any) -> str | None:
+            if value is None:
+                return None
+            text = str(value).strip()
+            return text if text else None
+
         return cls(
-            timestamp=parse_optional_float(data.get("timestamp")),
+            timestamp=parse_optional_timestamp(data.get("timestamp")),
             top_mm=float(data["top_mm"]),
             middle_mm=float(data["middle_mm"]),
             bottom_mm=float(data["bottom_mm"]),
@@ -353,7 +359,7 @@ def main() -> None:
                     running = False
                     break
 
-            use_simulated_feedback = (args.mode == "sim")
+            use_simulated_feedback = (args.mode == "sim" and serial_bridge is None and unix_bridge is None) # change this if needed *****
             controller.tick(simulate_feedback=use_simulated_feedback)
 
             if args.mode == "hw" and serial_bridge is not None:
