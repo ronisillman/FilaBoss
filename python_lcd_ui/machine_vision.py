@@ -11,7 +11,11 @@ import time
 import socket
 
 # Socket setup
-SOCKET_PATH = "/sockets/filament_socket.sock"
+SOCKET_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "sockets",
+    "filament_socket.sock",
+)
 vision_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
 

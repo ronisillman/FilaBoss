@@ -17,6 +17,13 @@ from input_devices import InputEvent, RotaryButtonInput
 from ui_controller import UiController
 
 
+DEFAULT_UNIX_SOCKET_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "sockets",
+    "filament_socket.sock",
+)
+
+
 @dataclass
 class TelemetryFromEsp32:
     load_mode: bool
@@ -260,7 +267,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--serial-port", type=str, default="/dev/ttyUSB0")
     parser.add_argument("--serial-baudrate", type=int, default=115200)
     parser.add_argument("--serial-tx-hz", type=float, default=20.0)
-    parser.add_argument("--unix-socket-path", type=str, default="/sockets/filament_socket.sock")
+    parser.add_argument("--unix-socket-path", type=str, default=DEFAULT_UNIX_SOCKET_PATH)
 
     parser.add_argument("--fps", type=float, default=12.0)
     return parser.parse_args()
