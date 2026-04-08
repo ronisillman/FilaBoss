@@ -15,6 +15,7 @@ PID SpoolPID(7000, 2500, 5.0);
 //PID RollerPID(1000, 0.3, 0.0); // Initialize PID controller with example gains
 //PID RollerPID(12000, 6000, 300); // for 24 VDC motor
 PID RollerPID(5000, 1500, 5.0); // for 12v dc motor
+PID RollerDiameterPID(5000, 1500, 5.0); // pulley PID for diameter mode (mm)
 //PID RollerPID(10000, 3000, 5.0); // for 12v dc motor
 
 // Board constants
@@ -122,8 +123,9 @@ struct CommandsToEsp32 {
     float pid_d_spool;
     uint8_t fan_speed_pct;
     float spool_current_target_ma;
-    char target_mode[4]; // "Dia" or "Spd"
+    char target_mode[4];
     float target_diameter_mm;
+    float measured_diameter_mm;
     float target_speed_mps;
 };
 
@@ -221,6 +223,7 @@ CommandsToEsp32 raspberryCommands = {
     100,
     50.0f,
     "Spd",
+    1.75f,
     1.75f,
     0.01f,
 };
@@ -477,16 +480,27 @@ void diagnose() {
 /// @param setSpeed Desired speed for the roller motor in m/s, used to calculate the speed error for the PID controller.
 /// @param actualSpeed Actual speed of the roller motor in m/s, used to calculate the speed error for the PID controller.
 /// TODO: Implement cascaded control to prevent spool and roller speed missmatch
+int computePulleyControlSignal(float setSpeed, float actualSpeed, bool forceSpeedMode = false) {
+    if (!forceSpeedMode && strcmp(raspberryCommands.target_mode, "Dia") == 0) {
+        float targetDiameter = constrain(raspberryCommands.target_diameter_mm, 0.5f, 5.0f);
+        float measuredDiameter = constrain(raspberryCommands.measured_diameter_mm, 0.5f, 5.0f);
+        RollerDiameterPID.setSetpoint(targetDiameter);
+        return RollerDiameterPID.compute(measuredDiameter);
+    }
+
+    RollerPID.setSetpoint(setSpeed); // Speed mode uses measured filament speed feedback
+    return RollerPID.compute(actualSpeed);
+}
+
 void motorControl(float setSpeed, float actualSpeed) {
     // Calculate error from no-load current
     float torqueCurrent = SpoolMotorCurrent - noLoadCurrent_Spool*SpoolPID.getOutput()/DAC_maxValue; // Subtract scaled no-load current from actual current to get torque-related current for spool
     
     SpoolPID.setSetpoint(SetTorqueCurrent); // Set current setpoint for spool PID
-    RollerPID.setSetpoint(setSpeed); // Set speed setpoint for roller PID
 
     // Update PID controllers
     int controlSignal_Spool = SpoolPID.compute(torqueCurrent);
-    int controlSignal_Roller = RollerPID.compute(actualSpeed);
+    int controlSignal_Roller = computePulleyControlSignal(setSpeed, actualSpeed);
 
     analogWrite(motorRollerPin, controlSignal_Roller);
     analogWrite(motorSpoolPin, controlSignal_Spool);
@@ -536,8 +550,7 @@ void enterLoadMode() {
     guideStepper->setSpeedInHz((uint32_t)STEPPER_MAX_SPEED);
     guideStepper->runForward();
     analogWrite(motorSpoolPin, 0); // spool stands still in load mode
-    RollerPID.setSetpoint(targetSpeed);
-    analogWrite(motorRollerPin, RollerPID.compute(speed)); // pulley keeps PID control
+    analogWrite(motorRollerPin, computePulleyControlSignal(targetSpeed, speed, true)); // load mode always uses speed PID for pulley
 }
 
 void exitLoadMode(bool keepStopped) {
@@ -567,8 +580,7 @@ void updateLoadMode(unsigned long microsCurrent) {
     switch (loadState) {
         case LOAD_HOMING: {
             analogWrite(motorSpoolPin, 0); // spool stands still in load mode
-            RollerPID.setSetpoint(targetSpeed);
-            analogWrite(motorRollerPin, RollerPID.compute(speed)); // pulley keeps PID control
+            analogWrite(motorRollerPin, computePulleyControlSignal(targetSpeed, speed, true)); // load mode always uses speed PID for pulley
 
             // Stop when low/home limit is reached.
             if (digitalRead(limitSwitchLowPin) == HIGH) {
@@ -589,8 +601,7 @@ void updateLoadMode(unsigned long microsCurrent) {
         case LOAD_WAIT_PHASE:
             setGuideDriverCurrent(GUIDE_TMC_HOLD_CURRENT_MA);
             analogWrite(motorSpoolPin, 0); // spool stands still in load phase
-            RollerPID.setSetpoint(targetSpeed);
-            analogWrite(motorRollerPin, RollerPID.compute(speed)); // pulley keeps PID control while waiting
+            analogWrite(motorRollerPin, computePulleyControlSignal(targetSpeed, speed, true)); // load mode always uses speed PID for pulley
             break;
 
         case LOAD_IDLE:
@@ -1119,6 +1130,7 @@ bool parseRaspberryCommands(const char* line) {
     raspberryCommands.fan_speed_pct = doc["fan_speed_pct"] | raspberryCommands.fan_speed_pct;
     raspberryCommands.spool_current_target_ma = doc["spool_current_target_ma"] | raspberryCommands.spool_current_target_ma;
     raspberryCommands.target_diameter_mm = doc["target_diameter_mm"] | raspberryCommands.target_diameter_mm;
+    raspberryCommands.measured_diameter_mm = doc["measured_diameter_mm"] | raspberryCommands.measured_diameter_mm;
     raspberryCommands.target_speed_mps = doc["target_speed_mps"] | raspberryCommands.target_speed_mps;
 
     const char* mode = doc["target_mode"] | raspberryCommands.target_mode;
@@ -1136,6 +1148,11 @@ void applyRaspberryCommands() {
     SetTorqueCurrent = constrain(raspberryCommands.spool_current_target_ma, 0.0f, 995.0f);
 
     RollerPID.setTunings(
+        raspberryCommands.pid_p_pulley,
+        raspberryCommands.pid_i_pulley,
+        raspberryCommands.pid_d_pulley
+    );
+    RollerDiameterPID.setTunings(
         raspberryCommands.pid_p_pulley,
         raspberryCommands.pid_i_pulley,
         raspberryCommands.pid_d_pulley

@@ -113,6 +113,7 @@ class CommandsToEsp32:
     spool_current_target_ma: float
     target_mode: str
     target_diameter_mm: float
+    measured_diameter_mm: float
     target_speed_mps: float
 
     @classmethod
@@ -129,6 +130,7 @@ class CommandsToEsp32:
             spool_current_target_ma=state.spool_current_target_ma,
             target_mode=state.target_mode,
             target_diameter_mm=state.target_diameter_hundredths / 100.0,
+            measured_diameter_mm=state.filament_diameter_mm,
             # UI target is in mm/s with one decimal (e.g. 00.1), convert to m/s for ESP.
             target_speed_mps=state.target_speed_tenths / 10000.0,
         )
