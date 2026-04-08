@@ -40,7 +40,8 @@ class AppState:
     waiting_for_load: bool = False
     pulley_speed_mps: float = 10.0
     diameter_travelled_mm: float = 0.0
-    pulley_gains: PidGains = field(default_factory=PidGains)
+    pulley_dia_gains: PidGains = field(default_factory=PidGains)
+    pulley_spd_gains: PidGains = field(default_factory=PidGains)
     spool_gains: PidGains = field(
         default_factory=lambda: PidGains(
             p=GainSetting(7000, 2),
@@ -153,7 +154,7 @@ class UiController:
             return
 
         if target == "MOTOR":
-            self.state.pid_motor_index = (self.state.pid_motor_index + step) % 2
+            self.state.pid_motor_index = (self.state.pid_motor_index + step) % 3
             return
 
         if target in {"P", "I", "D"}:
@@ -393,16 +394,24 @@ class UiController:
         ]
 
     def _motor_names(self) -> list[str]:
-        return ["Pulley", "Spool"]
+        return ["Pulley/Dia", "Pulley/Spd", "Spool"]
 
     def _current_motor_tag(self) -> str:
-        return "Pul" if self.state.pid_motor_index == 0 else "Spo"
+        if self.state.pid_motor_index == 0:
+            return "P/D"
+        if self.state.pid_motor_index == 1:
+            return "P/S"
+        return "Spo"
 
     def _current_motor_name(self) -> str:
         return self._motor_names()[self.state.pid_motor_index]
 
     def _current_gains(self) -> PidGains:
-        return self.state.pulley_gains if self.state.pid_motor_index == 0 else self.state.spool_gains
+        if self.state.pid_motor_index == 0:
+            return self.state.pulley_dia_gains
+        if self.state.pid_motor_index == 1:
+            return self.state.pulley_spd_gains
+        return self.state.spool_gains
 
     def _gain_by_label(self, label: str) -> GainSetting:
         gains = self._current_gains()

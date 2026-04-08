@@ -103,9 +103,12 @@ class DiameterFromVision:
 
 @dataclass
 class CommandsToEsp32:
-    pid_p_pulley: int
-    pid_i_pulley: int
-    pid_d_pulley: int
+    pid_p_pulley_dia: int
+    pid_i_pulley_dia: int
+    pid_d_pulley_dia: int
+    pid_p_pulley_spd: int
+    pid_i_pulley_spd: int
+    pid_d_pulley_spd: int
     pid_p_spool: int
     pid_i_spool: int
     pid_d_spool: int
@@ -120,9 +123,12 @@ class CommandsToEsp32:
     def from_controller(cls, controller: UiController) -> CommandsToEsp32:
         state = controller.state
         return cls(
-            pid_p_pulley=state.pulley_gains.p.digits,
-            pid_i_pulley=state.pulley_gains.i.digits,
-            pid_d_pulley=state.pulley_gains.d.digits,
+            pid_p_pulley_dia=state.pulley_dia_gains.p.digits,
+            pid_i_pulley_dia=state.pulley_dia_gains.i.digits,
+            pid_d_pulley_dia=state.pulley_dia_gains.d.digits,
+            pid_p_pulley_spd=state.pulley_spd_gains.p.digits,
+            pid_i_pulley_spd=state.pulley_spd_gains.i.digits,
+            pid_d_pulley_spd=state.pulley_spd_gains.d.digits,
             pid_p_spool=state.spool_gains.p.digits,
             pid_i_spool=state.spool_gains.i.digits,
             pid_d_spool=state.spool_gains.d.digits,

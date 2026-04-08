@@ -115,9 +115,12 @@ struct TelemetryFromEsp32 {
 };
 
 struct CommandsToEsp32 {
-    float pid_p_pulley;
-    float pid_i_pulley;
-    float pid_d_pulley;
+    float pid_p_pulley_dia;
+    float pid_i_pulley_dia;
+    float pid_d_pulley_dia;
+    float pid_p_pulley_spd;
+    float pid_i_pulley_spd;
+    float pid_d_pulley_spd;
     float pid_p_spool;
     float pid_i_spool;
     float pid_d_spool;
@@ -214,6 +217,9 @@ uint16_t raspberrySerialIndex = 0;
 unsigned long lastRaspberryCommandMs = 0;
 
 CommandsToEsp32 raspberryCommands = {
+    5000.0f,
+    1500.0f,
+    5.0f,
     5000.0f,
     1500.0f,
     5.0f,
@@ -1121,9 +1127,12 @@ bool parseRaspberryCommands(const char* line) {
         return false;
     }
 
-    raspberryCommands.pid_p_pulley = doc["pid_p_pulley"] | raspberryCommands.pid_p_pulley;
-    raspberryCommands.pid_i_pulley = doc["pid_i_pulley"] | raspberryCommands.pid_i_pulley;
-    raspberryCommands.pid_d_pulley = doc["pid_d_pulley"] | raspberryCommands.pid_d_pulley;
+    raspberryCommands.pid_p_pulley_dia = doc["pid_p_pulley_dia"] | (doc["pid_p_pulley"] | raspberryCommands.pid_p_pulley_dia);
+    raspberryCommands.pid_i_pulley_dia = doc["pid_i_pulley_dia"] | (doc["pid_i_pulley"] | raspberryCommands.pid_i_pulley_dia);
+    raspberryCommands.pid_d_pulley_dia = doc["pid_d_pulley_dia"] | (doc["pid_d_pulley"] | raspberryCommands.pid_d_pulley_dia);
+    raspberryCommands.pid_p_pulley_spd = doc["pid_p_pulley_spd"] | (doc["pid_p_pulley"] | raspberryCommands.pid_p_pulley_spd);
+    raspberryCommands.pid_i_pulley_spd = doc["pid_i_pulley_spd"] | (doc["pid_i_pulley"] | raspberryCommands.pid_i_pulley_spd);
+    raspberryCommands.pid_d_pulley_spd = doc["pid_d_pulley_spd"] | (doc["pid_d_pulley"] | raspberryCommands.pid_d_pulley_spd);
     raspberryCommands.pid_p_spool = doc["pid_p_spool"] | raspberryCommands.pid_p_spool;
     raspberryCommands.pid_i_spool = doc["pid_i_spool"] | raspberryCommands.pid_i_spool;
     raspberryCommands.pid_d_spool = doc["pid_d_spool"] | raspberryCommands.pid_d_spool;
@@ -1147,15 +1156,15 @@ void applyRaspberryCommands() {
     setFanDutyPercent((uint8_t)constrain((int)raspberryCommands.fan_speed_pct, 0, 100));
     SetTorqueCurrent = constrain(raspberryCommands.spool_current_target_ma, 0.0f, 995.0f);
 
-    RollerPID.setTunings(
-        raspberryCommands.pid_p_pulley,
-        raspberryCommands.pid_i_pulley,
-        raspberryCommands.pid_d_pulley
-    );
     RollerDiameterPID.setTunings(
-        raspberryCommands.pid_p_pulley,
-        raspberryCommands.pid_i_pulley,
-        raspberryCommands.pid_d_pulley
+        raspberryCommands.pid_p_pulley_dia,
+        raspberryCommands.pid_i_pulley_dia,
+        raspberryCommands.pid_d_pulley_dia
+    );
+    RollerPID.setTunings(
+        raspberryCommands.pid_p_pulley_spd,
+        raspberryCommands.pid_i_pulley_spd,
+        raspberryCommands.pid_d_pulley_spd
     );
     SpoolPID.setTunings(
         raspberryCommands.pid_p_spool,
