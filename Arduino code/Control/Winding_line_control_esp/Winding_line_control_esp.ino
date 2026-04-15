@@ -506,14 +506,22 @@ int computePulleyControlSignal(float setSpeed, float actualSpeed, bool forceSpee
 }
 
 void motorControl(float setSpeed, float actualSpeed) {
-    // Calculate error from no-load current
-    float torqueCurrent = SpoolMotorCurrent - noLoadCurrent_Spool*SpoolPID.getOutput()/DAC_maxValue; // Subtract scaled no-load current from actual current to get torque-related current for spool
-    
-    SpoolPID.setSetpoint(SetTorqueCurrent); // Set current setpoint for spool PID
+    int controlSignal_Roller;
+    if (setSpeed == 0.0f && strcmp(raspberryCommands.target_mode, "Spd") == 0) {
+        controlSignal_Roller = 0;
+    } else {
+        controlSignal_Roller = computePulleyControlSignal(setSpeed, actualSpeed);
+    }
 
-    // Update PID controllers
-    int controlSignal_Spool = SpoolPID.compute(torqueCurrent);
-    int controlSignal_Roller = computePulleyControlSignal(setSpeed, actualSpeed);
+    int controlSignal_Spool;
+    if (SetTorqueCurrent == 0.0) {
+        controlSignal_Spool = 0;
+    } else {
+        // Calculate error from no-load current
+        float torqueCurrent = SpoolMotorCurrent - noLoadCurrent_Spool*SpoolPID.getOutput()/DAC_maxValue; // Subtract scaled no-load current from actual current to get torque-related current for spool
+        SpoolPID.setSetpoint(SetTorqueCurrent);
+        controlSignal_Spool = SpoolPID.compute(torqueCurrent);
+    }
 
     analogWrite(motorRollerPin, controlSignal_Roller);
     analogWrite(motorSpoolPin, controlSignal_Spool);
