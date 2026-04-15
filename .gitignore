@@ -1,3 +1,35 @@
 .venv
 __pycache__/
 ui_state.json
+
+# Unix domain sockets
+*.sock
+
+# Python
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs and data output
+*.csv
+*.log
+
+# KiCad backups and locks
+*.bak
+*.lck
+*-backups/
+_autosave-*
+#auto_saved_files#/
+
+# Arduino build artifacts
+*.elf
+*.bin
+*.hex
+*.map
