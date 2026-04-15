@@ -15,7 +15,7 @@ PID SpoolPID(7000, 2500, 5.0);
 //PID RollerPID(1000, 0.3, 0.0); // Initialize PID controller with example gains
 //PID RollerPID(12000, 6000, 300); // for 24 VDC motor
 PID RollerPID(5000, 1500, 5.0); // for 12v dc motor
-PID RollerDiameterPID(5000, 1500, 5.0); // pulley PID for diameter mode (mm)
+PID RollerDiameterPID(-5000, -1500, -5.0); // pulley PID for diameter mode (mm) - negative gains: higher speed = smaller diameter
 //PID RollerPID(10000, 3000, 5.0); // for 12v dc motor
 
 // Board constants
@@ -1179,9 +1179,9 @@ void applyRaspberryCommands() {
     SetTorqueCurrent = constrain(raspberryCommands.spool_current_target_ma, 0.0f, 995.0f);
 
     RollerDiameterPID.setTunings(
-        raspberryCommands.pid_p_pulley_dia,
-        raspberryCommands.pid_i_pulley_dia,
-        raspberryCommands.pid_d_pulley_dia
+        -raspberryCommands.pid_p_pulley_dia,
+        -raspberryCommands.pid_i_pulley_dia,
+        -raspberryCommands.pid_d_pulley_dia
     );
     RollerPID.setTunings(
         raspberryCommands.pid_p_pulley_spd,
