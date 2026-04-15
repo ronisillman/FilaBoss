@@ -9,6 +9,9 @@ import time
 
 import socket
 
+# Only show OpenCV windows when a display is available (not in headless service mode).
+HAS_DISPLAY = bool(os.environ.get("DISPLAY", ""))
+
 # Socket setup
 SOCKET_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -199,7 +202,8 @@ while True:
 
         binary = cv2.medianBlur(binary, 3)
 
-        cv2.imshow(f"Binary ROI - {roi_names[idx]}", binary)
+        if HAS_DISPLAY:
+                cv2.imshow(f"Binary ROI - {roi_names[idx]}", binary)
 
         roi_h, roi_w = roi.shape
         xs = np.linspace(0, roi_w - 1, NUM_SCANLINES).astype(int)
@@ -315,9 +319,10 @@ while True:
         2
     )
 
-    cv2.imshow("Filament measurement", frame)
+    if HAS_DISPLAY:
+        cv2.imshow("Filament measurement", frame)
 
-    key = cv2.waitKey(1) & 0xFF
+    key = (cv2.waitKey(1) & 0xFF) if HAS_DISPLAY else 0xFF
 
     # CALIBRATE
     if key == ord('c'):
@@ -344,5 +349,6 @@ while True:
 
 
 picam2.stop()
-cv2.destroyAllWindows()
+if HAS_DISPLAY:
+    cv2.destroyAllWindows()
 vision_socket.close()
