@@ -242,6 +242,7 @@ long guideInitialPosSteps = 0;
 enum LoadState {
     LOAD_IDLE = 0,
     LOAD_HOMING,
+    LOAD_MOVE_TO_INITIAL,
     LOAD_WAIT_PHASE
 };
 
@@ -593,16 +594,23 @@ void updateLoadMode(unsigned long microsCurrent) {
                 guideStepper->stopMove();
                 guideStepper->forceStopAndNewPosition(0);
                 guideStepper->moveTo((int32_t)guideInitialPosSteps);
-                while (guideStepper->isRunning()) {
-                    delay(1);
-                }
-                guideStepper->stopMove();
-                guideStepper->forceStopAndNewPosition((int32_t)0);
-                loadState = LOAD_WAIT_PHASE;
+                loadState = LOAD_MOVE_TO_INITIAL;
                 break;
             }
             break;
         }
+
+        case LOAD_MOVE_TO_INITIAL:
+            analogWrite(motorSpoolPin, 0); // spool stands still in load phase
+            analogWrite(motorRollerPin, computePulleyControlSignal(targetSpeed, speed, true)); // keep pulley control active while guide moves to initial point
+
+            // Non-blocking move completion keeps UART2 polling/telemetry running.
+            if (!guideStepper->isRunning()) {
+                guideStepper->stopMove();
+                guideStepper->forceStopAndNewPosition((int32_t)0);
+                loadState = LOAD_WAIT_PHASE;
+            }
+            break;
 
         case LOAD_WAIT_PHASE:
             setGuideDriverCurrent(GUIDE_TMC_HOLD_CURRENT_MA);

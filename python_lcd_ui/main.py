@@ -6,6 +6,7 @@ import argparse
 import csv
 import importlib
 import json
+import math
 import os
 import socket
 import time
@@ -98,7 +99,8 @@ class DiameterFromVision:
 
     def apply_to_controller(self, controller: UiController) -> None:
         mean_diameter_mm = (self.top_mm + self.middle_mm + self.bottom_mm) / 3.0
-        controller.state.filament_diameter_mm = round(mean_diameter_mm, 3)
+        if math.isfinite(mean_diameter_mm):
+            controller.state.filament_diameter_mm = round(mean_diameter_mm, 3)
 
 
 @dataclass
@@ -122,6 +124,10 @@ class CommandsToEsp32:
     @classmethod
     def from_controller(cls, controller: UiController) -> CommandsToEsp32:
         state = controller.state
+
+        def finite_or_default(value: float, default: float) -> float:
+            return float(value) if math.isfinite(value) else float(default)
+
         return cls(
             pid_p_pulley_dia=state.pulley_dia_gains.p.digits,
             pid_i_pulley_dia=state.pulley_dia_gains.i.digits,
@@ -133,17 +139,17 @@ class CommandsToEsp32:
             pid_i_spool=state.spool_gains.i.digits,
             pid_d_spool=state.spool_gains.d.digits,
             fan_speed_pct=state.fan_speed_pct,
-            spool_current_target_ma=state.spool_current_target_ma,
+            spool_current_target_ma=finite_or_default(state.spool_current_target_ma, 50.0),
             target_mode=state.target_mode,
-            target_diameter_mm=state.target_diameter_hundredths / 100.0,
-            measured_diameter_mm=state.filament_diameter_mm,
+            target_diameter_mm=finite_or_default(state.target_diameter_hundredths / 100.0, 1.75),
+            measured_diameter_mm=finite_or_default(state.filament_diameter_mm, 1.75),
             # UI target is in mm/s with one decimal (e.g. 00.1), convert to m/s for ESP.
-            target_speed_mps=state.target_speed_tenths / 10000.0,
+            target_speed_mps=finite_or_default(state.target_speed_tenths / 10000.0, 0.01),
         )
 
     def to_json_line(self) -> str:
         payload: dict[str, Any] = asdict(self)
-        return json.dumps(payload, separators=(",", ":")) + "\n"
+        return json.dumps(payload, separators=(",", ":"), allow_nan=False) + "\n"
 
 
 class SerialJsonBridge:
