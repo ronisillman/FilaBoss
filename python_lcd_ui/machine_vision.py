@@ -37,8 +37,8 @@ socket_connected = connect_socket()
 
 CONFIG_FILE = "filament_config.json"
 
-REAL_FILAMENT_DIAMETER_MM = 2.85
-THRESHOLD = 140
+REAL_FILAMENT_DIAMETER_MM = 2.63
+THRESHOLD = 84
 NUM_SCANLINES = 120
 
 # -----------------------------
