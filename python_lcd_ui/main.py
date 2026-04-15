@@ -598,12 +598,18 @@ def main() -> None:
             load_mode = controller.state.load_mode
             if last_load_mode and not load_mode:
                 if args.csv_log_path:
-                    session_path = session_csv_log_path(args.csv_log_path, time.time())
-                    csv_logger = CsvMeasurementLogger(session_path)
-                    next_csv_log_time = time.monotonic() + csv_log_interval
+                    try:
+                        session_path = session_csv_log_path(args.csv_log_path, time.time())
+                        csv_logger = CsvMeasurementLogger(session_path)
+                        next_csv_log_time = time.monotonic() + csv_log_interval
+                    except Exception:
+                        csv_logger = None
             elif (not last_load_mode) and load_mode:
                 if csv_logger is not None:
-                    csv_logger.close()
+                    try:
+                        csv_logger.close()
+                    except Exception:
+                        pass
                     csv_logger = None
 
             last_load_mode = load_mode
@@ -614,14 +620,17 @@ def main() -> None:
                 if csv_timestamp is None:
                     csv_timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
 
-                csv_logger.write_row(
-                    timestamp=csv_timestamp,
-                    distance_mm=controller.state.diameter_travelled_mm,
-                    top_mm=last_diameter_for_csv.top_mm,
-                    middle_mm=last_diameter_for_csv.middle_mm,
-                    bottom_mm=last_diameter_for_csv.bottom_mm,
-                    roundness=last_diameter_for_csv.roundness,
-                )
+                try:
+                    csv_logger.write_row(
+                        timestamp=csv_timestamp,
+                        distance_mm=controller.state.diameter_travelled_mm,
+                        top_mm=last_diameter_for_csv.top_mm,
+                        middle_mm=last_diameter_for_csv.middle_mm,
+                        bottom_mm=last_diameter_for_csv.bottom_mm,
+                        roundness=last_diameter_for_csv.roundness,
+                    )
+                except Exception:
+                    csv_logger = None
                 next_csv_log_time = now + csv_log_interval
 
             use_simulated_feedback = (args.mode == "sim" and serial_bridge is None and unix_bridge is None) # change this if needed *****

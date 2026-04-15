@@ -1111,8 +1111,9 @@ void processRaspberryJsonLine(const char* line) {
 }
 
 bool parseRaspberryCommands(const char* line) {
-    // Robust framing: parse only the JSON object portion in case a noisy line contains extra chars.
-    const char* jsonStart = strchr(line, '{');
+    // Robust framing: use the LAST '{' so any partial frame prepended by a
+    // crashed/restarted sender is skipped, leaving only the complete object.
+    const char* jsonStart = strrchr(line, '{');
     const char* jsonEnd = strrchr(line, '}');
     if (jsonStart == nullptr || jsonEnd == nullptr || jsonEnd < jsonStart) {
         return false;
