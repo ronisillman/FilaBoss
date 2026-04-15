@@ -116,7 +116,7 @@ class UiController:
             self._switch_menu(focus_item)
             return
 
-        if focus_item in {"MOTOR", "P", "I", "D", "FAN_SPEED", "CURRENT_TRG", "MAIN_MODE", "MAIN_TRGT"}:
+        if focus_item in {"MOTOR", "P", "I", "D", "FAN_SPEED", "CURRENT_TRG", "MAIN_MODE", "MAIN_TRGT", "DIA_TRGT"}:
             self.state.menu_edit = True
             self.state.edit_target = focus_item
             self.state.gain_edit_step = 0
@@ -146,6 +146,10 @@ class UiController:
             self.state.spool_current_target_ma = max(0.0, min(500.0, self.state.spool_current_target_ma + step * 5.0))
             return
 
+        if target == "DIA_TRGT":
+            self.state.target_diameter_hundredths = max(150, min(315, self.state.target_diameter_hundredths + step))
+            return
+
         if target == "MAIN_TRGT":
             self._adjust_main_target_value(step)
             return
@@ -170,23 +174,23 @@ class UiController:
 
     def _switch_menu(self, menu_name: str) -> None:
         self.state.menu_index = self.menus.index(menu_name)
-        # Set default focus target per menu.
+        # Set default focus to first content item (skip current menu tab).
         if menu_name == "PID":
-            self.state.focus_index = 3  # MOTOR in PID items
+            self.state.focus_index = 2  # MOTOR in PID items
         elif menu_name == "CONTROL":
-            self.state.focus_index = 3  # FAN_SPEED in CONTROL items
+            self.state.focus_index = 2  # FAN_SPEED in CONTROL items
         else:
-            self.state.focus_index = self.menus.index(menu_name)
+            self.state.focus_index = 0  # CONTROL tab in MAIN items
         self.state.menu_edit = False
         self.state.edit_target = ""
         self.state.gain_edit_step = 0
 
     def _menu_items(self) -> list[str]:
         if self.state.menu_index == 1:
-            return ["MAIN", "CONTROL", "PID", "FAN_SPEED", "CURRENT_TRG"]
+            return ["MAIN", "PID", "FAN_SPEED", "CURRENT_TRG", "DIA_TRGT"]
         if self.state.menu_index == 2:
-            return ["MAIN", "CONTROL", "PID", "MOTOR", "P", "I", "D"]
-        return ["MAIN", "CONTROL", "PID", "MAIN_MODE", "MAIN_TRGT"]
+            return ["MAIN", "CONTROL", "MOTOR", "P", "I", "D"]
+        return ["CONTROL", "PID", "MAIN_MODE", "MAIN_TRGT"]
 
     def _current_focus_item(self) -> str:
         items = self._menu_items()
@@ -255,16 +259,18 @@ class UiController:
         blink_on = self._blink_on()
         chars = [" "] * self.cols
 
-        self._write_tab(chars, 0, "MAIN", focused=(focus_item == "MAIN"), blink_on=blink_on)
-        self._write_tab(chars, 6, "CONTROL", focused=(focus_item == "CONTROL"), blink_on=blink_on)
-        self._write_tab(chars, 15, "PID", focused=(focus_item == "PID"), blink_on=blink_on)
+        self._write_tab(chars, 0, "MAIN", focused=(focus_item == "MAIN"), active=(self.state.menu_index == 0), blink_on=blink_on)
+        self._write_tab(chars, 6, "CONTROL", focused=(focus_item == "CONTROL"), active=(self.state.menu_index == 1), blink_on=blink_on)
+        self._write_tab(chars, 15, "PID", focused=(focus_item == "PID"), active=(self.state.menu_index == 2), blink_on=blink_on)
 
         return "".join(chars)
 
-    def _write_tab(self, chars: list[str], start_index: int, label: str, focused: bool, blink_on: bool) -> None:
+    def _write_tab(self, chars: list[str], start_index: int, label: str, focused: bool, blink_on: bool, active: bool = False) -> None:
         width = len(label) + 2
 
-        if not focused:
+        if active:
+            rendered = f"|{label}|"
+        elif not focused:
             rendered = f" {label} "
         elif blink_on:
             rendered = f"[{label}]"
@@ -367,6 +373,17 @@ class UiController:
         fan_slot = render_slot(fan_value, fan_focused, fan_editing)
         trg_slot = render_slot(trg_value, trg_focused, trg_editing)
 
+        dia_focused = self._current_focus_item() == "DIA_TRGT" and not self.state.menu_edit
+        dia_editing = self.state.menu_edit and self.state.edit_target == "DIA_TRGT"
+        dia_digits = f"{max(150, min(315, self.state.target_diameter_hundredths)):03d}"
+        dia_rendered = f"{dia_digits[0]}.{dia_digits[1:]}"
+        if dia_editing:
+            dia_value = f"[{dia_rendered if blink_on else ' ' * len(dia_rendered)}]"
+        elif dia_focused and blink_on:
+            dia_value = f"[{dia_rendered}]"
+        else:
+            dia_value = f" {dia_rendered}"
+
         rpm_text = str(self._fan_speed_rpm())
         spool_current_text = str(int(round(self.state.spool_current_ma)))
         fan_line = f"Fan:{fan_slot}Rpm: {rpm_text}"
@@ -374,8 +391,8 @@ class UiController:
         return [
             fan_line,
             f"Spl:{trg_slot}Cur: {spool_current_text}",
-            "",
-    ]
+            f"Dia Target:{dia_value}",
+        ]
 
     def _render_load_mode(self) -> list[str]:
         target_value = f"{self.state.target_speed_tenths / 10.0:4.1f} mm/s"
