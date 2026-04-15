@@ -461,10 +461,9 @@ def session_csv_log_path(base_path: str, started_at: float) -> str:
 
 
 def default_csv_log_path() -> str:
-    usb_path = "/home/filaboss/usb"
-    if os.path.isdir(usb_path):
-        return os.path.join(usb_path, "filament_log.csv")
-    return os.path.join(os.path.expanduser("~"), "filament_log.csv")
+    reports_dir = "/home/filaboss/Filament reports"
+    os.makedirs(reports_dir, exist_ok=True)
+    return os.path.join(reports_dir, "filament_log.csv")
 
 
 def parse_args() -> argparse.Namespace:

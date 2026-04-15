@@ -1124,10 +1124,10 @@ void processRaspberryJsonLine(const char* line) {
 }
 
 bool parseRaspberryCommands(const char* line) {
-    // Robust framing: use the LAST '{' so any partial frame prepended by a
-    // crashed/restarted sender is skipped, leaving only the complete object.
+    // Robust framing: use the LAST '{' to skip any garbage/partial prefix,
+    // then the FIRST '}' after that to skip any trailing garbage suffix.
     const char* jsonStart = strrchr(line, '{');
-    const char* jsonEnd = strrchr(line, '}');
+    const char* jsonEnd = (jsonStart != nullptr) ? strchr(jsonStart, '}') : nullptr;
     if (jsonStart == nullptr || jsonEnd == nullptr || jsonEnd < jsonStart) {
         return false;
     }
