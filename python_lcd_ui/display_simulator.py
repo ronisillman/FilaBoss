@@ -75,7 +75,7 @@ class SimulatedLcdDisplay(DisplayBackend):
                     (y1 + y2) / 2,
                     text=" ",
                     fill=self._cell_text,
-                    font=("Px437 IBM VGA 8x16", 28),
+                    font=("5x8 LCD HD44780U A02 Regular", 28),
                 )
                 row_items.append((rect_id, text_id))
             self._cell_items.append(row_items)
