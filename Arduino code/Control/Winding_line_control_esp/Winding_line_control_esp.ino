@@ -336,12 +336,18 @@ void loop() {
             controlPaused = true;
     } else {
         if (controlPaused) {
+            // Use targetSpeed as fallback when measured speed is near zero
+            // (pulley was stopped during pause) to avoid setSpeedInHz(0) being
+            // ignored and the stepper resuming at whatever speed was last set.
+            double resumeSpeed = (speed > SPEED_DEADBAND_MPS) ? speed : targetSpeed;
             if (guideMovingTowardMax && LOAD_IDLE == loadState) {
-                commandedAbsSpeed = fabs(computeGuideSpeedHz(speed));
+                commandedAbsSpeed = fabs(computeGuideSpeedHz(resumeSpeed));
+                if (commandedAbsSpeed < 1.0) commandedAbsSpeed = 1.0;
                 guideStepper->setSpeedInHz(commandedAbsSpeed);
                 guideStepper->moveTo((int32_t)guideMaxPositionSteps);
             } else if (LOAD_IDLE == loadState) {
-                commandedAbsSpeed = fabs(computeGuideSpeedHz(speed));
+                commandedAbsSpeed = fabs(computeGuideSpeedHz(resumeSpeed));
+                if (commandedAbsSpeed < 1.0) commandedAbsSpeed = 1.0;
                 guideStepper->setSpeedInHz(commandedAbsSpeed);
                 guideStepper->moveTo(0);
             }
@@ -575,6 +581,13 @@ void exitLoadMode(bool keepStopped) {
     guideStepper->stopMove();
     guideStepper->forceStopAndNewPosition(0);
     if (!keepStopped) {
+        // Explicitly set winding speed before starting the move. Without this,
+        // the stepper retains STEPPER_MAX_SPEED from homing and runs at full
+        // speed until stepperControl() corrects it — which only happens once a
+        // valid encoder reading is available (~50% of exits had the bug).
+        commandedAbsSpeed = fabs(computeGuideSpeedHz(targetSpeed));
+        if (commandedAbsSpeed < 1.0) commandedAbsSpeed = 1.0;
+        guideStepper->setSpeedInHz((uint32_t)commandedAbsSpeed);
         guideStepper->moveTo((int32_t)guideMaxPositionSteps);
     }
 
