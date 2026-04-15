@@ -9,8 +9,8 @@ import time
 
 import socket
 
-# Only show OpenCV windows when a display is available (not in headless service mode).
-HAS_DISPLAY = bool(os.environ.get("DISPLAY", ""))
+# Only show OpenCV windows when a display is available AND not running as a headless service.
+HAS_DISPLAY = bool(os.environ.get("DISPLAY", "")) and not bool(os.environ.get("FILABOSS_HEADLESS", ""))
 
 # Socket setup
 SOCKET_PATH = os.path.join(
@@ -254,28 +254,36 @@ while True:
 
     # Roundness
     if calibration_locked:
-        diameters = []
+        # Collect per-roi smoothed diameters, keeping index (0=top,1=mid,2=bot)
+        diameters_by_roi = [
+            np.mean(history[i]) if len(history[i]) > 0 else None
+            for i in range(3)
+        ]
+        available = [d for d in diameters_by_roi if d is not None]
 
-        for i in range(3):
-            if len(history[i]) > 0:
-                diameters.append(np.mean(history[i]))
+        if len(available) >= 1:
+            d_mean = np.mean(available)
+            # Roundness only meaningful with 2+ measurements
+            if len(available) >= 2:
+                d_max = np.max(available)
+                d_min = np.min(available)
+                roundness_index = (d_max - d_min) / d_mean
+            else:
+                roundness_index = 0.0
 
-        if len(diameters) == 3:
-            d_mean = np.mean(diameters)
-            d_max = np.max(diameters)
-            d_min = np.min(diameters)
-
-            roundness_index = (d_max - d_min) / d_mean
-            
             current_time = time.time()
 
             if current_time - last_socket_send_time >= 0.5:
+                # Fill missing ROIs with the mean of available ones
+                top_mm    = diameters_by_roi[0] if diameters_by_roi[0] is not None else d_mean
+                middle_mm = diameters_by_roi[1] if diameters_by_roi[1] is not None else d_mean
+                bottom_mm = diameters_by_roi[2] if diameters_by_roi[2] is not None else d_mean
                 timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
                 payload = {
                     "timestamp": timestamp,
-                    "top_mm": round(diameters[0], 3),
-                    "middle_mm": round(diameters[1], 3),
-                    "bottom_mm": round(diameters[2], 3),
+                    "top_mm": round(top_mm, 3),
+                    "middle_mm": round(middle_mm, 3),
+                    "bottom_mm": round(bottom_mm, 3),
                     "roundness": round(roundness_index, 3)
                 }
 
@@ -297,15 +305,16 @@ while True:
                         pass
                     vision_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
-            cv2.putText(
-                frame,
-                f"Roundness: {roundness_index:.4f}",
-                (40, 160),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,
-                (0,200,255),
-                2
-            )
+            if HAS_DISPLAY and len(available) >= 2:
+                cv2.putText(
+                    frame,
+                    f"Roundness: {roundness_index:.4f}",
+                    (40, 160),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.8,
+                    (0,200,255),
+                    2
+                )
 
     status = "LOCKED" if calibration_locked else "NOT CALIBRATED"
 
