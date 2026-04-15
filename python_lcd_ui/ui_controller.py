@@ -55,7 +55,7 @@ class AppState:
 class UiController:
     """UI logic independent from display/input implementation."""
 
-    menus = ["MAIN", "PID", "FAN"]
+    menus = ["MAIN", "PID", "CONTROL"]
 
     def __init__(self, cols: int = 20, rows: int = 4) -> None:
         self.cols = cols
@@ -170,8 +170,8 @@ class UiController:
         # Set default focus target per menu.
         if menu_name == "PID":
             self.state.focus_index = 3  # MOTOR in PID items
-        elif menu_name == "FAN":
-            self.state.focus_index = 3  # FAN_SPEED in FAN items
+        elif menu_name == "CONTROL":
+            self.state.focus_index = 3  # FAN_SPEED in CONTROL items
         else:
             self.state.focus_index = self.menus.index(menu_name)
         self.state.menu_edit = False
@@ -180,10 +180,10 @@ class UiController:
 
     def _menu_items(self) -> list[str]:
         if self.state.menu_index == 1:
-            return ["MAIN", "PID", "FAN", "MOTOR", "P", "I", "D"]
+            return ["MAIN", "PID", "CONTROL", "MOTOR", "P", "I", "D"]
         if self.state.menu_index == 2:
-            return ["MAIN", "PID", "FAN", "FAN_SPEED", "CURRENT_TRG"]
-        return ["MAIN", "PID", "FAN", "MAIN_MODE", "MAIN_TRGT"]
+            return ["MAIN", "PID", "CONTROL", "FAN_SPEED", "CURRENT_TRG"]
+        return ["MAIN", "PID", "CONTROL", "MAIN_MODE", "MAIN_TRGT"]
 
     def _current_focus_item(self) -> str:
         items = self._menu_items()
@@ -254,7 +254,7 @@ class UiController:
 
         self._write_tab(chars, 0, "MAIN", focused=(focus_item == "MAIN"), blink_on=blink_on)
         self._write_tab(chars, 6, "PID", focused=(focus_item == "PID"), blink_on=blink_on)
-        self._write_tab(chars, 11, "FAN", focused=(focus_item == "FAN"), blink_on=blink_on)
+        self._write_tab(chars, 11, "CONTROL", focused=(focus_item == "CONTROL"), blink_on=blink_on)
 
         return "".join(chars)
 
