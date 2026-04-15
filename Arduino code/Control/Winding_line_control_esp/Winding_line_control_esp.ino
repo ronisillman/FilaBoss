@@ -212,7 +212,7 @@ unsigned long lastDistanceUpdateMs = 0;
 char serialInputBuffer[64];
 uint8_t serialInputIndex = 0;
 
-char raspberrySerialBuffer[384];
+char raspberrySerialBuffer[768];
 uint16_t raspberrySerialIndex = 0;
 unsigned long lastRaspberryCommandMs = 0;
 
@@ -1127,7 +1127,7 @@ bool parseRaspberryCommands(const char* line) {
     memcpy(jsonPayload, jsonStart, jsonLen);
     jsonPayload[jsonLen] = '\0';
 
-    StaticJsonDocument<512> doc;
+    StaticJsonDocument<768> doc;
     DeserializationError error = deserializeJson(doc, jsonPayload);
     if (error) {
         Serial.print("WARN: Raspberry JSON parse failed: ");
@@ -1135,22 +1135,22 @@ bool parseRaspberryCommands(const char* line) {
         return false;
     }
 
-    raspberryCommands.pid_p_pulley_dia = doc["pid_p_pulley_dia"] | (doc["pid_p_pulley"] | raspberryCommands.pid_p_pulley_dia);
-    raspberryCommands.pid_i_pulley_dia = doc["pid_i_pulley_dia"] | (doc["pid_i_pulley"] | raspberryCommands.pid_i_pulley_dia);
-    raspberryCommands.pid_d_pulley_dia = doc["pid_d_pulley_dia"] | (doc["pid_d_pulley"] | raspberryCommands.pid_d_pulley_dia);
-    raspberryCommands.pid_p_pulley_spd = doc["pid_p_pulley_spd"] | (doc["pid_p_pulley"] | raspberryCommands.pid_p_pulley_spd);
-    raspberryCommands.pid_i_pulley_spd = doc["pid_i_pulley_spd"] | (doc["pid_i_pulley"] | raspberryCommands.pid_i_pulley_spd);
-    raspberryCommands.pid_d_pulley_spd = doc["pid_d_pulley_spd"] | (doc["pid_d_pulley"] | raspberryCommands.pid_d_pulley_spd);
-    raspberryCommands.pid_p_spool = doc["pid_p_spool"] | raspberryCommands.pid_p_spool;
-    raspberryCommands.pid_i_spool = doc["pid_i_spool"] | raspberryCommands.pid_i_spool;
-    raspberryCommands.pid_d_spool = doc["pid_d_spool"] | raspberryCommands.pid_d_spool;
-    raspberryCommands.fan_speed_pct = doc["fan_speed_pct"] | raspberryCommands.fan_speed_pct;
-    raspberryCommands.spool_current_target_ma = doc["spool_current_target_ma"] | raspberryCommands.spool_current_target_ma;
-    raspberryCommands.target_diameter_mm = doc["target_diameter_mm"] | raspberryCommands.target_diameter_mm;
-    raspberryCommands.measured_diameter_mm = doc["measured_diameter_mm"] | raspberryCommands.measured_diameter_mm;
-    raspberryCommands.target_speed_mps = doc["target_speed_mps"] | raspberryCommands.target_speed_mps;
+    raspberryCommands.pid_p_pulley_dia = doc["p1"] | doc["pid_p_pulley_dia"] | (doc["pid_p_pulley"] | raspberryCommands.pid_p_pulley_dia);
+    raspberryCommands.pid_i_pulley_dia = doc["i1"] | doc["pid_i_pulley_dia"] | (doc["pid_i_pulley"] | raspberryCommands.pid_i_pulley_dia);
+    raspberryCommands.pid_d_pulley_dia = doc["d1"] | doc["pid_d_pulley_dia"] | (doc["pid_d_pulley"] | raspberryCommands.pid_d_pulley_dia);
+    raspberryCommands.pid_p_pulley_spd = doc["p2"] | doc["pid_p_pulley_spd"] | (doc["pid_p_pulley"] | raspberryCommands.pid_p_pulley_spd);
+    raspberryCommands.pid_i_pulley_spd = doc["i2"] | doc["pid_i_pulley_spd"] | (doc["pid_i_pulley"] | raspberryCommands.pid_i_pulley_spd);
+    raspberryCommands.pid_d_pulley_spd = doc["d2"] | doc["pid_d_pulley_spd"] | (doc["pid_d_pulley"] | raspberryCommands.pid_d_pulley_spd);
+    raspberryCommands.pid_p_spool = doc["p3"] | doc["pid_p_spool"] | raspberryCommands.pid_p_spool;
+    raspberryCommands.pid_i_spool = doc["i3"] | doc["pid_i_spool"] | raspberryCommands.pid_i_spool;
+    raspberryCommands.pid_d_spool = doc["d3"] | doc["pid_d_spool"] | raspberryCommands.pid_d_spool;
+    raspberryCommands.fan_speed_pct = doc["f"] | doc["fan_speed_pct"] | raspberryCommands.fan_speed_pct;
+    raspberryCommands.spool_current_target_ma = doc["c"] | doc["spool_current_target_ma"] | raspberryCommands.spool_current_target_ma;
+    raspberryCommands.target_diameter_mm = doc["td"] | doc["target_diameter_mm"] | raspberryCommands.target_diameter_mm;
+    raspberryCommands.measured_diameter_mm = doc["md"] | doc["measured_diameter_mm"] | raspberryCommands.measured_diameter_mm;
+    raspberryCommands.target_speed_mps = doc["ts"] | doc["target_speed_mps"] | raspberryCommands.target_speed_mps;
 
-    const char* mode = doc["target_mode"] | raspberryCommands.target_mode;
+    const char* mode = doc["m"] | doc["target_mode"] | raspberryCommands.target_mode;
     if (strcmp(mode, "Dia") == 0 || strcmp(mode, "Spd") == 0) {
         strncpy(raspberryCommands.target_mode, mode, sizeof(raspberryCommands.target_mode) - 1);
         raspberryCommands.target_mode[sizeof(raspberryCommands.target_mode) - 1] = '\0';

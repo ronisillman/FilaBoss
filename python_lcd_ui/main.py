@@ -24,6 +24,10 @@ DEFAULT_UNIX_SOCKET_PATH = os.path.join(
     "sockets",
     "filament_socket.sock",
 )
+UI_STATE_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "ui_state.json",
+)
 
 
 @dataclass
@@ -148,8 +152,91 @@ class CommandsToEsp32:
         )
 
     def to_json_line(self) -> str:
-        payload: dict[str, Any] = asdict(self)
+        payload: dict[str, Any] = {
+            "p1": self.pid_p_pulley_dia,
+            "i1": self.pid_i_pulley_dia,
+            "d1": self.pid_d_pulley_dia,
+            "p2": self.pid_p_pulley_spd,
+            "i2": self.pid_i_pulley_spd,
+            "d2": self.pid_d_pulley_spd,
+            "p3": self.pid_p_spool,
+            "i3": self.pid_i_spool,
+            "d3": self.pid_d_spool,
+            "f": self.fan_speed_pct,
+            "c": self.spool_current_target_ma,
+            "m": self.target_mode,
+            "td": self.target_diameter_mm,
+            "md": self.measured_diameter_mm,
+            "ts": self.target_speed_mps,
+        }
         return json.dumps(payload, separators=(",", ":"), allow_nan=False) + "\n"
+
+
+def load_ui_state(controller: UiController, file_path: str) -> None:
+    try:
+        with open(file_path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError, TypeError):
+        return
+
+    state = controller.state
+
+    def set_int(name: str, minimum: int, maximum: int) -> None:
+        value = data.get(name)
+        if isinstance(value, int):
+            setattr(state, name, max(minimum, min(maximum, value)))
+
+    def set_float(name: str, minimum: float, maximum: float) -> None:
+        value = data.get(name)
+        if isinstance(value, (int, float)) and math.isfinite(float(value)):
+            setattr(state, name, max(minimum, min(maximum, float(value))))
+
+    if isinstance(data.get("target_mode"), str) and data["target_mode"] in {"Dia", "Spd"}:
+        state.target_mode = data["target_mode"]
+
+    set_int("target_diameter_hundredths", 0, 999)
+    set_int("target_speed_tenths", 0, 999)
+    set_int("fan_speed_pct", 0, 100)
+    set_float("spool_current_target_ma", 0.0, 995.0)
+
+
+def save_ui_state(controller: UiController, file_path: str) -> None:
+    state = controller.state
+    payload = {
+        "target_mode": state.target_mode,
+        "target_diameter_hundredths": state.target_diameter_hundredths,
+        "target_speed_tenths": state.target_speed_tenths,
+        "fan_speed_pct": state.fan_speed_pct,
+        "spool_current_target_ma": state.spool_current_target_ma,
+        "pid_motor_index": state.pid_motor_index,
+        "pulley_dia_gains": {
+            "p": asdict(state.pulley_dia_gains.p),
+            "i": asdict(state.pulley_dia_gains.i),
+            "d": asdict(state.pulley_dia_gains.d),
+        },
+        "pulley_spd_gains": {
+            "p": asdict(state.pulley_spd_gains.p),
+            "i": asdict(state.pulley_spd_gains.i),
+            "d": asdict(state.pulley_spd_gains.d),
+        },
+        "spool_gains": {
+            "p": asdict(state.spool_gains.p),
+            "i": asdict(state.spool_gains.i),
+            "d": asdict(state.spool_gains.d),
+        },
+    }
+
+    tmp_path = f"{file_path}.tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"))
+        os.replace(tmp_path, file_path)
+    except OSError:
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except OSError:
+            pass
 
 
 class SerialJsonBridge:
@@ -409,6 +496,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     controller = UiController(cols=args.cols, rows=args.rows)
+    load_ui_state(controller, UI_STATE_PATH)
 
     display = None
     input_device = None
@@ -455,6 +543,7 @@ def main() -> None:
         pending_diameter: DiameterFromVision | None = None
         last_diameter_for_csv: DiameterFromVision | None = None
         last_load_mode = controller.state.load_mode
+        next_state_save_time = time.monotonic()
         running = True
 
         while running:
@@ -544,6 +633,11 @@ def main() -> None:
                     commands_json = CommandsToEsp32.from_controller(controller).to_json_line()
                     serial_bridge.write_line(commands_json)
                     next_tx_time = now + tx_period
+
+            now = time.monotonic()
+            if now >= next_state_save_time:
+                save_ui_state(controller, UI_STATE_PATH)
+                next_state_save_time = now + 1.0
 
             lines = controller.render_lines()
             for row, text in enumerate(lines):
