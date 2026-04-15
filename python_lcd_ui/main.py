@@ -155,20 +155,73 @@ class SerialJsonBridge:
         except ImportError as exc:
             raise RuntimeError("pyserial is required for serial communication. Run: pip install pyserial") from exc
 
-        self._serial = serial.Serial(port=port, baudrate=baudrate, timeout=timeout)
+        self._serial_module = serial
+        self._port = port
+        self._baudrate = baudrate
+        self._timeout = timeout
+        self._serial = self._open_serial()
         self._rx_buffer = ""
+        self._next_reconnect_time = 0.0
+
+    def _open_serial(self) -> Any:
+        return self._serial_module.Serial(
+            port=self._port,
+            baudrate=self._baudrate,
+            timeout=self._timeout,
+        )
+
+    def _mark_disconnected(self) -> None:
+        if self._serial is not None:
+            try:
+                self._serial.close()
+            except Exception:
+                pass
+        self._serial = None
+        self._rx_buffer = ""
+        self._next_reconnect_time = time.monotonic() + 1.0
+
+    def _ensure_connected(self) -> bool:
+        if self._serial is not None:
+            return True
+
+        now = time.monotonic()
+        if now < self._next_reconnect_time:
+            return False
+
+        try:
+            self._serial = self._open_serial()
+            self._next_reconnect_time = 0.0
+            return True
+        except Exception:
+            self._next_reconnect_time = now + 1.0
+            return False
 
     def read_line(self) -> str | None:
+        if not self._ensure_connected():
+            return None
+
         # Always consume already-buffered complete lines first.
         if "\n" in self._rx_buffer:
             line, self._rx_buffer = self._rx_buffer.split("\n", 1)
             return line.strip()
 
-        waiting = int(self._serial.in_waiting)
+        assert self._serial is not None
+
+        try:
+            waiting = int(self._serial.in_waiting)
+        except Exception:
+            self._mark_disconnected()
+            return None
+
         if waiting <= 0:
             return None
 
-        chunk = self._serial.read(waiting).decode("utf-8", errors="replace")
+        try:
+            chunk = self._serial.read(waiting).decode("utf-8", errors="replace")
+        except Exception:
+            self._mark_disconnected()
+            return None
+
         if not chunk:
             return None
 
@@ -180,10 +233,19 @@ class SerialJsonBridge:
         return line.strip()
 
     def write_line(self, line: str) -> None:
-        self._serial.write(line.encode("utf-8"))
+        if not self._ensure_connected():
+            return
+
+        assert self._serial is not None
+
+        try:
+            self._serial.write(line.encode("utf-8"))
+        except Exception:
+            self._mark_disconnected()
 
     def close(self) -> None:
-        self._serial.close()
+        if self._serial is not None:
+            self._serial.close()
 
 
 class UnixJsonBridge:

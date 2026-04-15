@@ -59,9 +59,9 @@ const float GUIDE_TMC_R_SENSE = 0.11f;
 #define leadScrewPitch 0.004 //m per revolution (4 mm pitch)
 #define ApproachStepInterval 1000.0 // microseconds between steps
 
-#define guideMaxPosition 0.03 //m, 5 cm guide travel like standalone test
+#define guideMaxPosition 0.02 //m, 5 cm guide travel like standalone test
 #define spoolRadius 0.053 //m, start radius of the filament spool
-#define filamentDiameter 0.00285 //m, diameter of the filament
+#define filamentDiameter 0.002 //m, diameter of the filament
 #define spoolWidth 0.045 //m, width of the filament spool
 
 #define rollerRadius 0.0119 //m, radius of the roller in contact with the filament, used for speed calculation
@@ -236,7 +236,7 @@ CommandsToEsp32 raspberryCommands = {
 
 long lastStepperPosSteps = 0;
 long guideMaxPositionSteps = 0;
-const double guideInitialPosition = 0.005;
+const double guideInitialPosition = 0.0055;
 long guideInitialPosSteps = 0;
 
 enum LoadState {
