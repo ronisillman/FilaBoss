@@ -109,15 +109,15 @@ class DiameterFromVision:
 
 @dataclass
 class CommandsToEsp32:
-    pid_p_pulley_dia: int
-    pid_i_pulley_dia: int
-    pid_d_pulley_dia: int
-    pid_p_pulley_spd: int
-    pid_i_pulley_spd: int
-    pid_d_pulley_spd: int
-    pid_p_spool: int
-    pid_i_spool: int
-    pid_d_spool: int
+    pid_p_pulley_dia: float
+    pid_i_pulley_dia: float
+    pid_d_pulley_dia: float
+    pid_p_pulley_spd: float
+    pid_i_pulley_spd: float
+    pid_d_pulley_spd: float
+    pid_p_spool: float
+    pid_i_spool: float
+    pid_d_spool: float
     fan_speed_pct: int
     spool_current_target_ma: float
     target_mode: str
@@ -133,15 +133,15 @@ class CommandsToEsp32:
             return float(value) if math.isfinite(value) else float(default)
 
         return cls(
-            pid_p_pulley_dia=state.pulley_dia_gains.p.digits,
-            pid_i_pulley_dia=state.pulley_dia_gains.i.digits,
-            pid_d_pulley_dia=state.pulley_dia_gains.d.digits,
-            pid_p_pulley_spd=state.pulley_spd_gains.p.digits,
-            pid_i_pulley_spd=state.pulley_spd_gains.i.digits,
-            pid_d_pulley_spd=state.pulley_spd_gains.d.digits,
-            pid_p_spool=state.spool_gains.p.digits,
-            pid_i_spool=state.spool_gains.i.digits,
-            pid_d_spool=state.spool_gains.d.digits,
+            pid_p_pulley_dia=state.pulley_dia_gains.p.to_float(),
+            pid_i_pulley_dia=state.pulley_dia_gains.i.to_float(),
+            pid_d_pulley_dia=state.pulley_dia_gains.d.to_float(),
+            pid_p_pulley_spd=state.pulley_spd_gains.p.to_float(),
+            pid_i_pulley_spd=state.pulley_spd_gains.i.to_float(),
+            pid_d_pulley_spd=state.pulley_spd_gains.d.to_float(),
+            pid_p_spool=state.spool_gains.p.to_float(),
+            pid_i_spool=state.spool_gains.i.to_float(),
+            pid_d_spool=state.spool_gains.d.to_float(),
             fan_speed_pct=state.fan_speed_pct,
             spool_current_target_ma=finite_or_default(state.spool_current_target_ma, 50.0),
             target_mode=state.target_mode,
@@ -198,6 +198,31 @@ def load_ui_state(controller: UiController, file_path: str) -> None:
     set_int("target_speed_tenths", 0, 999)
     set_int("fan_speed_pct", 0, 100)
     set_float("spool_current_target_ma", 0.0, 995.0)
+
+    def load_gain_setting(gain_setting: "GainSetting", data_dict: object) -> None:
+        if not isinstance(data_dict, dict):
+            return
+        digits = data_dict.get("digits")
+        dot_index = data_dict.get("dot_index")
+        if isinstance(digits, int) and 0 <= digits <= 99999:
+            gain_setting.digits = digits
+        if isinstance(dot_index, int) and 0 <= dot_index <= 5:
+            gain_setting.dot_index = dot_index
+
+    def load_pid_gains(pid_gains: "PidGains", key: str) -> None:
+        gains_data = data.get(key)
+        if not isinstance(gains_data, dict):
+            return
+        load_gain_setting(pid_gains.p, gains_data.get("p"))
+        load_gain_setting(pid_gains.i, gains_data.get("i"))
+        load_gain_setting(pid_gains.d, gains_data.get("d"))
+
+    load_pid_gains(state.pulley_dia_gains, "pulley_dia_gains")
+    load_pid_gains(state.pulley_spd_gains, "pulley_spd_gains")
+    load_pid_gains(state.spool_gains, "spool_gains")
+
+    if isinstance(data.get("pid_motor_index"), int):
+        state.pid_motor_index = max(0, min(2, data["pid_motor_index"]))
 
 
 def save_ui_state(controller: UiController, file_path: str) -> None:
@@ -489,6 +514,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--csv-log-interval", type=float, default=5.0)
 
     parser.add_argument("--fps", type=float, default=12.0)
+    parser.add_argument("--monitor", action="store_true", help="Show live target/state monitor below the simulated LCD (sim mode only)")
     return parser.parse_args()
 
 
@@ -505,7 +531,7 @@ def main() -> None:
 
     try:
         if args.mode == "sim":
-            display = SimulatedLcdDisplay(cols=args.cols, rows=args.rows)
+            display = SimulatedLcdDisplay(cols=args.cols, rows=args.rows, monitor=args.monitor)
         else:
             display = HardwareLcdDisplay(
                 cols=args.cols,
@@ -650,6 +676,21 @@ def main() -> None:
             lines = controller.render_lines()
             for row, text in enumerate(lines):
                 display.write_line(row, text)
+
+            if args.mode == "sim" and args.monitor and hasattr(display, "update_monitor"):
+                s = controller.state
+                cmd = CommandsToEsp32.from_controller(controller)
+                monitor_text = (
+                    f"Mode: {s.target_mode}   "
+                    f"Target Dia: {s.target_diameter_hundredths / 100.0:.2f} mm   "
+                    f"Target Spd: {s.target_speed_tenths / 10.0:.1f} mm/s\n"
+                    f"Fan: {s.fan_speed_pct}%   "
+                    f"Spool Current Target: {s.spool_current_target_ma:.0f} mA\n"
+                    f"PID Pulley/Dia  P:{s.pulley_dia_gains.p.to_float():.4g}  I:{s.pulley_dia_gains.i.to_float():.4g}  D:{s.pulley_dia_gains.d.to_float():.4g}   "
+                    f"PID Pulley/Spd  P:{s.pulley_spd_gains.p.to_float():.4g}  I:{s.pulley_spd_gains.i.to_float():.4g}  D:{s.pulley_spd_gains.d.to_float():.4g}   "
+                    f"PID Spool  P:{s.spool_gains.p.to_float():.4g}  I:{s.spool_gains.i.to_float():.4g}  D:{s.spool_gains.d.to_float():.4g}\n"
+                )
+                display.update_monitor(monitor_text)
 
             time.sleep(frame_delay)
 

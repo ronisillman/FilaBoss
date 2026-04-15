@@ -10,7 +10,7 @@ from input_devices import InputEvent
 class SimulatedLcdDisplay(DisplayBackend):
     """Small desktop simulator that looks like a green character LCD."""
 
-    def __init__(self, cols: int = 20, rows: int = 4) -> None:
+    def __init__(self, cols: int = 20, rows: int = 4, monitor: bool = False) -> None:
         self.cols = cols
         self.rows = rows
         self._open = True
@@ -97,6 +97,23 @@ class SimulatedLcdDisplay(DisplayBackend):
         self._root.focus_force()
         self.clear()
 
+        self._monitor_label: tk.Label | None = None
+        if monitor:
+            sep = tk.Frame(self._root, bg="#444444", height=1)
+            sep.pack(fill="x", padx=10, pady=(4, 0))
+            self._monitor_label = tk.Label(
+                self._root,
+                text="",
+                fg="#e0e0e0",
+                bg="#1a1a1a",
+                font=("Consolas", 11),
+                anchor="w",
+                justify="left",
+                padx=10,
+                pady=6,
+            )
+            self._monitor_label.pack(fill="x", padx=0, pady=(0, 8))
+
     @property
     def is_open(self) -> bool:
         return self._open
@@ -138,6 +155,10 @@ class SimulatedLcdDisplay(DisplayBackend):
         for col, char in enumerate(text):
             _, text_id = cell_row[col]
             self._canvas.itemconfigure(text_id, text=char)
+
+    def update_monitor(self, text: str) -> None:
+        if self._monitor_label is not None:
+            self._monitor_label.configure(text=text)
 
     def close(self) -> None:
         self._open = False

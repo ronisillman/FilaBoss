@@ -12,6 +12,9 @@ class GainSetting:
     digits: int
     dot_index: int  # 0..5, decimal point insertion index from left
 
+    def to_float(self) -> float:
+        return self.digits / (10 ** (5 - max(0, min(5, self.dot_index))))
+
 
 @dataclass
 class PidGains:
