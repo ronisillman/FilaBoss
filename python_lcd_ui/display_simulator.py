@@ -16,30 +16,30 @@ class SimulatedLcdDisplay(DisplayBackend):
         self._open = True
         self._events: deque[InputEvent] = deque()
         self._buffer = [" " * self.cols for _ in range(self.rows)]
-        self._cell_width = 22
-        self._cell_height = 26
-        self._cell_gap = 3
-        self._cell_outline = "#447e4e"
-        self._cell_fill = "#18341f"
-        self._cell_text = "#a8ffb5"
+        self._cell_width = 40
+        self._cell_height = 56
+        self._cell_gap = 4
+        self._cell_outline = "#2450a8"
+        self._cell_fill = "#2e5ec0"
+        self._cell_text = "#f0f8ff"
 
         self._root = tk.Tk()
         self._root.title(f"LCD Simulator ({cols}x{rows})")
-        self._root.configure(bg="#0b140e")
+        self._root.configure(bg="#1a1a1a")
         self._root.protocol("WM_DELETE_WINDOW", self._on_close)
 
         instruction = tk.Label(
             self._root,
             text="Controls: Left=up, Right=down, Up=down, Down=up, Space/Enter=select, D=Target Dia, S=Target Spd, L=Toggle Load Mode, Esc=Quit",
-            fg="#b8ffc9",
-            bg="#0b140e",
+            fg="#999999",
+            bg="#1a1a1a",
             font=("Consolas", 10),
             anchor="w",
             justify="left",
         )
         instruction.pack(fill="x", padx=10, pady=(8, 2))
 
-        frame = tk.Frame(self._root, bg="#1d4f2b", bd=4, relief="ridge")
+        frame = tk.Frame(self._root, bg="#111111", bd=8, relief="flat")
         frame.pack(padx=10, pady=(2, 10), fill="both", expand=True)
 
         canvas_width = self.cols * self._cell_width + (self.cols + 1) * self._cell_gap
@@ -48,7 +48,7 @@ class SimulatedLcdDisplay(DisplayBackend):
             frame,
             width=canvas_width,
             height=canvas_height,
-            bg="#1d4f2b",
+            bg="#3b6fd4",
             highlightthickness=0,
         )
         self._canvas.pack(padx=8, pady=8)
@@ -75,7 +75,7 @@ class SimulatedLcdDisplay(DisplayBackend):
                     (y1 + y2) / 2,
                     text=" ",
                     fill=self._cell_text,
-                    font=("Consolas", 15, "bold"),
+                    font=("Px437 IBM VGA 8x16", 28),
                 )
                 row_items.append((rect_id, text_id))
             self._cell_items.append(row_items)

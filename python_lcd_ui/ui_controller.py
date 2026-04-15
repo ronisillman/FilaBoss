@@ -55,7 +55,7 @@ class AppState:
 class UiController:
     """UI logic independent from display/input implementation."""
 
-    menus = ["MAIN", "PID", "CONTROL"]
+    menus = ["MAIN", "CONTROL", "PID"]
 
     def __init__(self, cols: int = 20, rows: int = 4) -> None:
         self.cols = cols
@@ -122,7 +122,7 @@ class UiController:
         step = -1 if direction == "up" else 1
 
         if self.state.load_mode:
-            self.state.target_speed_tenths = max(0, min(999, self.state.target_speed_tenths + step))
+            self.state.target_speed_tenths = max(0, min(200, self.state.target_speed_tenths + step))
             return
 
         if self.state.menu_edit:
@@ -140,7 +140,7 @@ class UiController:
             return
 
         if target == "CURRENT_TRG":
-            self.state.spool_current_target_ma = max(0.0, min(995.0, self.state.spool_current_target_ma + step * 5.0))
+            self.state.spool_current_target_ma = max(0.0, min(500.0, self.state.spool_current_target_ma + step * 5.0))
             return
 
         if target == "MAIN_TRGT":
@@ -180,10 +180,10 @@ class UiController:
 
     def _menu_items(self) -> list[str]:
         if self.state.menu_index == 1:
-            return ["MAIN", "PID", "CONTROL", "MOTOR", "P", "I", "D"]
+            return ["MAIN", "CONTROL", "PID", "FAN_SPEED", "CURRENT_TRG"]
         if self.state.menu_index == 2:
-            return ["MAIN", "PID", "CONTROL", "FAN_SPEED", "CURRENT_TRG"]
-        return ["MAIN", "PID", "CONTROL", "MAIN_MODE", "MAIN_TRGT"]
+            return ["MAIN", "CONTROL", "PID", "MOTOR", "P", "I", "D"]
+        return ["MAIN", "CONTROL", "PID", "MAIN_MODE", "MAIN_TRGT"]
 
     def _current_focus_item(self) -> str:
         items = self._menu_items()
@@ -212,7 +212,7 @@ class UiController:
         self.state.fan_rpm = max(0.0, min(2000.0, target_fan_rpm + stepped_offset))
 
         # Keep user-selected current target and simulate measured current around it.
-        self.state.spool_current_target_ma = max(0.0, min(995.0, self.state.spool_current_target_ma))
+        self.state.spool_current_target_ma = max(0.0, min(500.0, self.state.spool_current_target_ma))
         current_offset = math.sin(elapsed * 0.8) * 20.0
         self.state.spool_current_ma = max(
             0.0,
@@ -236,9 +236,9 @@ class UiController:
         if self.state.menu_index == 0:
             body = self._render_main_menu()
         elif self.state.menu_index == 1:
-            body = self._render_pid_menu()
-        else:
             body = self._render_fan_menu()
+        else:
+            body = self._render_pid_menu()
 
         lines = [self._render_tab_strip(), *body]
 
@@ -253,8 +253,8 @@ class UiController:
         chars = [" "] * self.cols
 
         self._write_tab(chars, 0, "MAIN", focused=(focus_item == "MAIN"), blink_on=blink_on)
-        self._write_tab(chars, 6, "PID", focused=(focus_item == "PID"), blink_on=blink_on)
-        self._write_tab(chars, 11, "CONTROL", focused=(focus_item == "CONTROL"), blink_on=blink_on)
+        self._write_tab(chars, 6, "CONTROL", focused=(focus_item == "CONTROL"), blink_on=blink_on)
+        self._write_tab(chars, 15, "PID", focused=(focus_item == "PID"), blink_on=blink_on)
 
         return "".join(chars)
 
@@ -293,7 +293,7 @@ class UiController:
 
         return [
             f"Dia: {self.state.filament_diameter_mm:5.3f} mm",
-            f"Spd: {self.state.pulley_speed_mps:4.1f} mm/s",
+            f"Spd: {self.state.pulley_speed_mps:5.1f} mm/s",
             f"M:{mode_value} Trgt:{target_value}",
         ]
 
@@ -366,11 +366,11 @@ class UiController:
 
         rpm_text = str(self._fan_speed_rpm())
         spool_current_text = str(int(round(self.state.spool_current_ma)))
-        fan_line = f"FAN:{fan_slot}RPM: {rpm_text}"
+        fan_line = f"Fan:{fan_slot}Rpm: {rpm_text}"
 
         return [
             fan_line,
-            f"Trg:{trg_slot}Cur: {spool_current_text}",
+            f"Spl:{trg_slot}Cur: {spool_current_text}",
             "",
     ]
 
@@ -444,16 +444,16 @@ class UiController:
 
     def _main_target_digits(self) -> str:
         if self.state.target_mode == "Dia":
-            value = max(0, min(999, self.state.target_diameter_hundredths))
+            value = max(150, min(315, self.state.target_diameter_hundredths))
         else:
-            value = max(0, min(999, self.state.target_speed_tenths))
+            value = max(0, min(200, self.state.target_speed_tenths))
         return f"{value:03d}"
 
     def _adjust_main_target_value(self, step: int) -> None:
         if self.state.target_mode == "Dia":
-            self.state.target_diameter_hundredths = max(0, min(999, self.state.target_diameter_hundredths + step))
+            self.state.target_diameter_hundredths = max(150, min(315, self.state.target_diameter_hundredths + step))
         else:
-            self.state.target_speed_tenths = max(0, min(999, self.state.target_speed_tenths + step))
+            self.state.target_speed_tenths = max(0, min(200, self.state.target_speed_tenths + step))
 
     def _render_main_target_value(
         self,
