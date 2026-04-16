@@ -92,10 +92,10 @@ cv2.namedWindow("ROI tuner")
 cv2.moveWindow("ROI tuner", 0, 0)
 for name in names:
     cv2.namedWindow(name)
-ROI_WIN_X = 1100
+ROI_WIN_X = 1090
 cv2.moveWindow(names[0], ROI_WIN_X, 0)
-cv2.moveWindow(names[1], ROI_WIN_X, 260)
-cv2.moveWindow(names[2], ROI_WIN_X, 520)
+cv2.moveWindow(names[1], ROI_WIN_X, 200)
+cv2.moveWindow(names[2], ROI_WIN_X, 400)
 
 # -----------------------------
 # Main loop
@@ -122,7 +122,7 @@ while True:
         roi = gray[y0:y1,x0:x1]
 
         if roi.size > 0:
-            zoom = cv2.resize(roi,None,fx=3,fy=3,
+            zoom = cv2.resize(roi,None,fx=2,fy=2,
                               interpolation=cv2.INTER_NEAREST)
             cv2.imshow(names[i],zoom)
 
