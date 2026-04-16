@@ -301,8 +301,8 @@ class UiController:
         )
 
         return [
-            f"Dia: {self.state.filament_diameter_mm:5.3f} mm",
-            f"Spd: {self.state.pulley_speed_mps:5.1f} mm/s",
+            f"Dia: {self.state.filament_diameter_mm:4.2f} mm",
+            f"Spd: {self.state.pulley_speed_mps:4.1f} mm/s",
             f"M:{mode_value} Trgt:{target_value}",
         ]
 
