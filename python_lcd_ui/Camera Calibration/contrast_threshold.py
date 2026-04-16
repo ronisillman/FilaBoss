@@ -75,6 +75,17 @@ print("Q = quit")
 print(f"Starting threshold: {threshold_value}")
 
 # -----------------------------
+# Window positions
+# -----------------------------
+roi_win_x = 1100
+cv2.namedWindow("Threshold tuner")
+cv2.moveWindow("Threshold tuner", 0, 0)
+for idx, name in enumerate(roi_names):
+    win_name = f"Binary ROI - {name}"
+    cv2.namedWindow(win_name)
+    cv2.moveWindow(win_name, roi_win_x, idx * 140)
+
+# -----------------------------
 # Main loop
 # -----------------------------
 while True:

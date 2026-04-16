@@ -86,6 +86,18 @@ print("P = save settings")
 print("Q = quit")
 
 # -----------------------------
+# Window positions
+# -----------------------------
+cv2.namedWindow("ROI tuner")
+cv2.moveWindow("ROI tuner", 0, 0)
+for name in names:
+    cv2.namedWindow(name)
+ROI_WIN_X = 1100
+cv2.moveWindow(names[0], ROI_WIN_X, 0)
+cv2.moveWindow(names[1], ROI_WIN_X, 260)
+cv2.moveWindow(names[2], ROI_WIN_X, 520)
+
+# -----------------------------
 # Main loop
 # -----------------------------
 while True:
