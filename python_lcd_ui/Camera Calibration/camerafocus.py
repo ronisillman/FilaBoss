@@ -2,8 +2,9 @@ from picamera2 import Picamera2
 from libcamera import controls
 import cv2
 import json
+import os
 
-CONFIG_FILE = "filament_config.json"
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "filament_config.json")
 
 # -----------------------------
 # Load saved settings if exist

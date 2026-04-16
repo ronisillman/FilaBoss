@@ -35,10 +35,12 @@ socket_connected = connect_socket()
 
 
 
-CONFIG_FILE = "filament_config.json"
+CONFIG_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "Camera Calibration",
+    "filament_config.json",
+)
 
-REAL_FILAMENT_DIAMETER_MM = 2.63
-THRESHOLD = 84
 NUM_SCANLINES = 120
 
 # -----------------------------
@@ -93,49 +95,15 @@ def load_settings():
 
     mm_per_pixel = data.get("mm_per_pixel", [None, None, None])
     calibration_locked = data.get("calibration_locked", False)
+    threshold = data.get("threshold", 84)
 
-    return lens_position, rois, mm_per_pixel, calibration_locked
-
-
-def save_calibration(lens_position, rois, mm_per_pixel, calibration_locked):
-    data = {}
-
-    try:
-        with open(CONFIG_FILE) as f:
-            data = json.load(f)
-    except FileNotFoundError:
-        pass
-
-    data["lens_position"] = lens_position
-
-    roi_list = []
-    for (x0, y0, x1, y1) in rois:
-        cx = (x0 + x1) / 2
-        cy = (y0 + y1) / 2
-        w = (x1 - x0)
-        h = (y1 - y0)
-
-        roi_list.append({
-            "cx": cx,
-            "cy": cy,
-            "w": w,
-            "h": h
-        })
-
-    data["rois"] = roi_list
-    data["mm_per_pixel"] = mm_per_pixel
-    data["calibration_locked"] = calibration_locked
-
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(data, f, indent=4)
-
-    print("Calibration saved")
+    return lens_position, rois, mm_per_pixel, calibration_locked, threshold
 
 
 # -----------------------------
 # Load config
 # -----------------------------
-lens_position, rois, mm_per_pixel, calibration_locked = load_settings()
+lens_position, rois, mm_per_pixel, calibration_locked, THRESHOLD = load_settings()
 roi_names = ["Top", "Middle", "Bottom"]
 
 last_socket_send_time = time.time()
@@ -159,8 +127,6 @@ picam2.set_controls({
 })
 
 print("Controls:")
-print("C = calibrate scale")
-print("R = reset calibration")
 print("Q = quit")
 
 # -----------------------------
@@ -177,7 +143,6 @@ while True:
     gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
 
     h, w = gray.shape
-    pixel_measurements = [None, None, None]
 
     for idx, (rx0, ry0, rx1, ry1) in enumerate(rois):
 
@@ -225,7 +190,6 @@ while True:
 
         if diameters_px:
             diameter_px = np.median(diameters_px)
-            pixel_measurements[idx] = diameter_px
 
             if calibration_locked and mm_per_pixel[idx] is not None:
                 diameter_mm = diameter_px * mm_per_pixel[idx]
@@ -333,27 +297,7 @@ while True:
 
     key = (cv2.waitKey(1) & 0xFF) if HAS_DISPLAY else 0xFF
 
-    # CALIBRATE
-    if key == ord('c'):
-        if all(p is not None for p in pixel_measurements):
-
-            for i in range(3):
-                mm_per_pixel[i] = REAL_FILAMENT_DIAMETER_MM / pixel_measurements[i]
-
-            calibration_locked = True
-            save_calibration(lens_position, rois, mm_per_pixel, calibration_locked)
-
-            print("Calibration locked and saved")
-
-    # RESET
-    elif key == ord('r'):
-        mm_per_pixel = [None, None, None]
-        calibration_locked = False
-        save_calibration(lens_position, rois, mm_per_pixel, calibration_locked)
-
-        print("Calibration reset")
-
-    elif key == ord('q'):
+    if key == ord('q'):
         break
 
 

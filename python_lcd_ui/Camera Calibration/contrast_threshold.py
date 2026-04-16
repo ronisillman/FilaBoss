@@ -3,8 +3,9 @@ from libcamera import controls
 import cv2
 import numpy as np
 import json
+import os
 
-CONFIG_FILE = "filament_config.json"
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "filament_config.json")
 
 # -----------------------------
 # Load calibration
@@ -29,10 +30,24 @@ def load_settings():
 
         rois.append((x0, y0, x1, y1))
 
-    return lens_position, rois
+    threshold = data.get("threshold", 106)
+
+    return lens_position, rois, threshold
 
 
-lens_position, rois = load_settings()
+def save_threshold(threshold):
+    with open(CONFIG_FILE) as f:
+        data = json.load(f)
+
+    data["threshold"] = threshold
+
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+    print(f"Threshold {threshold} saved to {CONFIG_FILE}")
+
+
+lens_position, rois, threshold_value = load_settings()
 roi_names = ["Top", "Middle", "Bottom"]
 
 # -----------------------------
@@ -52,15 +67,12 @@ picam2.set_controls({
     "LensPosition": lens_position
 })
 
-# -----------------------------
-# Threshold value (adjustable)
-# -----------------------------
-threshold_value = 106
-
 print("Controls:")
 print("U = increase threshold")
 print("J = decrease threshold")
+print("P = save threshold")
 print("Q = quit")
+print(f"Starting threshold: {threshold_value}")
 
 # -----------------------------
 # Main loop
@@ -119,6 +131,9 @@ while True:
 
     elif key == ord('j'):
         threshold_value = max(0, threshold_value - 2)
+
+    elif key == ord('p'):
+        save_threshold(threshold_value)
 
     elif key == ord('q'):
         break
