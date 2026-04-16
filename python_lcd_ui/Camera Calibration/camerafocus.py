@@ -41,13 +41,17 @@ def load_settings():
 # -----------------------------
 def save_settings(rois, lens_position):
 
-    data = {
-        "lens_position": lens_position,
-        "rois": [
-            {"cx": r[0], "cy": r[1], "w": r[2], "h": r[3]}
-            for r in rois
-        ]
-    }
+    try:
+        with open(CONFIG_FILE) as f:
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        data = {}
+
+    data["lens_position"] = lens_position
+    data["rois"] = [
+        {"cx": r[0], "cy": r[1], "w": r[2], "h": r[3]}
+        for r in rois
+    ]
 
     with open(CONFIG_FILE, "w") as f:
         json.dump(data, f, indent=4)

@@ -85,7 +85,7 @@ picam2.set_controls({
 
 print("Place a known-diameter filament in the ROIs")
 print(f"Reference diameter: {REAL_FILAMENT_DIAMETER_MM} mm")
-print("C = capture and save calibration")
+print("P = save calibration")
 print("Q = quit without saving")
 
 # -----------------------------
@@ -148,13 +148,13 @@ while True:
         cv2.rectangle(frame, (rx0, ry0), (rx1, ry1), color, 2)
 
     ready = all(p is not None for p in pixel_measurements)
-    status = "Ready - press C to calibrate" if ready else "Waiting for all 3 ROIs..."
+    status = "Ready - press P to save calibration" if ready else "Waiting for all 3 ROIs..."
     cv2.putText(frame, status, (40, 130), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
     cv2.imshow("Scale calibration", frame)
     key = cv2.waitKey(1) & 0xFF
 
-    if key == ord('c'):
+    if key == ord('p'):
         if ready:
             mm_per_pixel = [
                 REAL_FILAMENT_DIAMETER_MM / pixel_measurements[i]
