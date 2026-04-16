@@ -79,6 +79,7 @@ print(f"Starting threshold: {threshold_value}")
 # -----------------------------
 roi_win_x = 1090
 cv2.namedWindow("Threshold tuner")
+cv2.imshow("Threshold tuner", np.zeros((720, 1080, 3), dtype=np.uint8))
 cv2.moveWindow("Threshold tuner", 0, 0)
 for idx, name in enumerate(roi_names):
     win_name = f"Binary ROI - {name}"

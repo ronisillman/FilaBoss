@@ -7,7 +7,6 @@ import os
 
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "filament_config.json")
 
-THRESHOLD = 84
 NUM_SCANLINES = 120
 
 
@@ -42,7 +41,9 @@ def load_settings():
         cx, cy, w, h = r["cx"], r["cy"], r["w"], r["h"]
         rois.append((int(cx - w/2), int(cy - h/2), int(cx + w/2), int(cy + h/2)))
 
-    return lens_position, rois, data
+    threshold = data.get("threshold", 84)
+
+    return lens_position, rois, data, threshold
 
 
 def save_calibration(data, mm_per_pixel):
@@ -58,7 +59,7 @@ def save_calibration(data, mm_per_pixel):
 # -----------------------------
 # Camera setup
 # -----------------------------
-lens_position, rois, config_data = load_settings()
+lens_position, rois, config_data, THRESHOLD = load_settings()
 roi_names = ["Top", "Middle", "Bottom"]
 
 while True:
@@ -86,6 +87,13 @@ print("Place a known-diameter filament in the ROIs")
 print(f"Reference diameter: {REAL_FILAMENT_DIAMETER_MM} mm")
 print("C = capture and save calibration")
 print("Q = quit without saving")
+
+# -----------------------------
+# Window positions
+# -----------------------------
+cv2.namedWindow("Scale calibration")
+cv2.imshow("Scale calibration", np.zeros((720, 1080, 3), dtype=np.uint8))
+cv2.moveWindow("Scale calibration", 0, 0)
 
 # -----------------------------
 # Main loop

@@ -89,6 +89,7 @@ print("Q = quit")
 # Window positions
 # -----------------------------
 cv2.namedWindow("ROI tuner")
+cv2.imshow("ROI tuner", np.zeros((720, 1080, 3), dtype=np.uint8))
 cv2.moveWindow("ROI tuner", 0, 0)
 for name in names:
     cv2.namedWindow(name)
