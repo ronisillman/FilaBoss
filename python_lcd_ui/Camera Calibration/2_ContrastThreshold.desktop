@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=2. Contrast Threshold
+Comment=Calibrate contrast threshold for edge detection
+Exec=bash -c "sudo systemctl stop filaboss-machine-vision && cd '/home/filaboss/FilaBoss/python_lcd_ui/Camera Calibration' && DISPLAY=:0 python3 contrast_threshold.py; sudo systemctl start filaboss-machine-vision"
+Terminal=true
+Icon=preferences-color
+Categories=Utility;

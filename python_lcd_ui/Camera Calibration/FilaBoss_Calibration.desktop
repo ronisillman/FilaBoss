@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=FilaBoss Calibration
+Comment=Run full camera calibration sequence (focus, threshold, scale)
+Exec=bash -c "chmod +x '/home/filaboss/FilaBoss/python_lcd_ui/Camera Calibration/launch_calibration.sh' && '/home/filaboss/FilaBoss/python_lcd_ui/Camera Calibration/launch_calibration.sh'"
+Terminal=true
+Icon=camera
+Categories=Utility;

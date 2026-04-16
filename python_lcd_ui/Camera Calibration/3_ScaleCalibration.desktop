@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=3. Scale Calibration
+Comment=Calibrate mm/pixel scale with a known filament diameter
+Exec=bash -c "sudo systemctl stop filaboss-machine-vision && cd '/home/filaboss/FilaBoss/python_lcd_ui/Camera Calibration' && DISPLAY=:0 python3 scale_calibration.py; sudo systemctl start filaboss-machine-vision"
+Terminal=true
+Icon=accessories-calculator
+Categories=Utility;
