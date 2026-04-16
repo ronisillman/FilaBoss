@@ -61,7 +61,6 @@ const float GUIDE_TMC_R_SENSE = 0.11f;
 
 #define guideMaxPosition 0.02 //m, 5 cm guide travel like standalone test
 #define spoolRadius 0.053 //m, start radius of the filament spool
-#define filamentDiameter 0.002 //m, diameter of the filament
 #define spoolWidth 0.045 //m, width of the filament spool
 
 #define rollerRadius 0.0119 //m, radius of the roller in contact with the filament, used for speed calculation
@@ -134,7 +133,6 @@ struct CommandsToEsp32 {
 
 
 const static double stepsPerRevolution = stepsPerRev*microsteps;
-const static double ratio = filamentDiameter/leadScrewPitch; //gear ratio between spool and guide, set to 1 for direct drive
 
 volatile double guidePosition = 0.0; //m, current position of the filament guide
 volatile int layerNumber = 0; //current layer number, used for testing
@@ -528,7 +526,9 @@ void motorControl(float setSpeed, float actualSpeed) {
 }
 
 double computeGuideSpeedHz(double filamentSpeedMps) {
-    double spoolOmega = filamentSpeedMps / (spoolRadius + layerNumber * filamentDiameter);
+    double filamentDiameter_m = (double)raspberryCommands.target_diameter_mm / 1000.0;
+    double ratio = filamentDiameter_m / leadScrewPitch;
+    double spoolOmega = filamentSpeedMps / (spoolRadius + layerNumber * filamentDiameter_m);
     double guideOmega = spoolOmega * ratio;
     double hz = fabs(guideOmega / (2.0 * PI) * stepsPerRevolution);
     return hz;
