@@ -18169,7 +18169,7 @@
 				)
 			)
 		)
-		(property "Value" "Power Pmos"
+		(property "Value" "IRF9540N"
 			(at 2.54 2.5 0)
 			(layer "F.Fab")
 			(hide yes)
@@ -18535,6 +18535,16 @@
 		(fill no)
 		(layer "Edge.Cuts")
 		(uuid "53614e95-8045-49ca-afca-f1a3ce8b3d1b")
+	)
+	(gr_line
+		(start 38.1 86.36)
+		(end 140.97 86.36)
+		(stroke
+			(width 0.1)
+			(type default)
+		)
+		(layer "B.Fab")
+		(uuid "af6207ac-e4de-4a85-8488-0a73e3a9d7e8")
 	)
 	(via
 		(at 137.16 90.17)

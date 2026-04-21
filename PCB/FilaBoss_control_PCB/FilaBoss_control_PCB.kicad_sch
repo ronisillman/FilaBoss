@@ -11915,7 +11915,7 @@
 		(dnp no)
 		(uuid "61c4b441-a146-49a7-bf0a-beca5d580c22")
 		(property "Reference" "Q3"
-			(at 48.26 17.78 90)
+			(at 50.8 19.05 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11923,8 +11923,8 @@
 				(justify left)
 			)
 		)
-		(property "Value" "Power Pmos"
-			(at 43.18 15.24 90)
+		(property "Value" "IRF9540N"
+			(at 48.26 19.05 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13240,7 +13240,7 @@
 				(justify right)
 			)
 		)
-		(property "Value" "2k"
+		(property "Value" "1k"
 			(at 50.8 34.29 90)
 			(effects
 				(font
