@@ -1116,8 +1116,8 @@ bool parseRaspberryCommands(const char* line) {
     StaticJsonDocument<768> doc;
     DeserializationError error = deserializeJson(doc, jsonPayload);
     if (error) {
-        Serial.print("WARN: Raspberry JSON parse failed: ");
-        Serial.println(error.c_str());
+        //Serial.print("WARN: Raspberry JSON parse failed: ");
+        //Serial.println(error.c_str());
         return false;
     }
 
