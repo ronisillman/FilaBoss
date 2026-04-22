@@ -33,6 +33,7 @@ public:
     kp = kp_val;
     ki = ki_val;
     kd = kd_val;
+    previousFilteredDerivative = 0.0; // Reset filter state: old state was scaled by previous kd
   }
 
   // Set derivative filter coefficient (0.0-1.0, lower = more smoothing)
@@ -73,12 +74,9 @@ public:
     if (integral < outputMin) integral = outputMin;
 
     // Derivative term with filtering
-    float derivative = 0;
-    if (deltaTime > 0) {
-      float rawDerivative = kd * (error - previousError) / deltaTime;
-      derivative = previousFilteredDerivative + derivativeFilterCoeff * (rawDerivative - previousFilteredDerivative);
-      previousFilteredDerivative = derivative;
-    }
+    float rawDerivative = kd * (error - previousError) / deltaTime;
+    float derivative = previousFilteredDerivative + derivativeFilterCoeff * (rawDerivative - previousFilteredDerivative);
+    previousFilteredDerivative = derivative;
 
     // Store error for next iteration
     previousError = error;
