@@ -71,7 +71,7 @@ const float GUIDE_TMC_R_SENSE = 0.11f;
 
 // Filter variables for measurment smoothing
 #define CurrentfilterAlpha 0.02 // Smoothing factor for current measurements
-#define SpeedFilterAlpha 0.03 // Smoothing factor for speed measurements
+#define SpeedFilterAlpha 0.01 // Smoothing factor for speed measurements
 
 #define PCNT_H_LIM 32767
 
@@ -491,7 +491,7 @@ void diagnose() {
 /// @param setSpeed Desired speed for the roller motor in m/s, used to calculate the speed error for the PID controller.
 /// @param actualSpeed Actual speed of the roller motor in m/s, used to calculate the speed error for the PID controller.
 /// TODO: Implement cascaded control to prevent spool and roller speed missmatch
-int computePulleyControlSignal(float setSpeed, float actualSpeed, bool forceSpeedMode = false) {
+float computePulleyControlSignal(float setSpeed, float actualSpeed, bool forceSpeedMode = false) {
     if (!forceSpeedMode && strcmp(raspberryCommands.target_mode, "Dia") == 0) {
         float targetDiameter = constrain(raspberryCommands.target_diameter_mm, 0.5f, 5.0f);
         float measuredDiameter = constrain(raspberryCommands.measured_diameter_mm, 0.5f, 5.0f);
@@ -834,7 +834,7 @@ void pollPcntPulseEvent() {
     }
 
     int countDelta = pcntCount - prevPcntCount;
-    if (countDelta != 0) {
+    if (countDelta != 0 && abs(countDelta) < 1000) { // Sanity check to filter out spurious large jumps
         encoderPulseEvent = true;
         prevPcntCount = pcntCount;
     }
