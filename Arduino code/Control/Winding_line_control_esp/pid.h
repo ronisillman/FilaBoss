@@ -8,6 +8,8 @@ private:
   float previousError;
   unsigned long lastTime;
   float outputMin, outputMax, output;
+  float derivativeFilterCoeff;  // Filter coefficient for derivative smoothing (0.1-1.0)
+  float previousFilteredDerivative;  // Previous filtered derivative value
 
 public:
   // Constructor
@@ -18,10 +20,12 @@ public:
     setpoint = 0.0;
     integral = 0.0;
     previousError = 0.0;
-    lastTime = millis();
+    lastTime = micros();
     outputMin = -255.0;
     outputMax = 255.0;
     output = 0.0;
+    derivativeFilterCoeff = 0.2;  // Default filter coefficient (lower = more smoothing)
+    previousFilteredDerivative = 0.0;
   }
 
   // Set PID tuning parameters
@@ -29,6 +33,11 @@ public:
     kp = kp_val;
     ki = ki_val;
     kd = kd_val;
+  }
+
+  // Set derivative filter coefficient (0.0-1.0, lower = more smoothing)
+  void setDerivativeFilter(float filterCoeff) {
+    derivativeFilterCoeff = constrain(filterCoeff, 0.01, 1.0);
   }
 
   // Set the desired setpoint
@@ -44,8 +53,8 @@ public:
 
   // Compute PID output based on current feedback
   float compute(float feedback) {
-    unsigned long currentTime = millis();
-    float deltaTime = (currentTime - lastTime) / 1000.0; // Convert to seconds
+    unsigned long currentTime = micros();
+    float deltaTime = (currentTime - lastTime) / 1000000.0; // Convert to seconds
 
     // Avoid division by zero - return previous output if no time has passed
     if (deltaTime == 0) return output;
@@ -63,10 +72,12 @@ public:
     if (integral > outputMax) integral = outputMax;
     if (integral < outputMin) integral = outputMin;
 
-    // Derivative term
+    // Derivative term with filtering
     float derivative = 0;
     if (deltaTime > 0) {
-      derivative = kd * (error - previousError) / deltaTime;
+      float rawDerivative = kd * (error - previousError) / deltaTime;
+      derivative = previousFilteredDerivative + derivativeFilterCoeff * (rawDerivative - previousFilteredDerivative);
+      previousFilteredDerivative = derivative;
     }
 
     // Store error for next iteration
@@ -86,7 +97,8 @@ public:
   void reset() {
     integral = 0.0;
     previousError = 0.0;
-    lastTime = millis();
+    previousFilteredDerivative = 0.0;
+    lastTime = micros();
   }
 
   // Get current setpoint
@@ -98,7 +110,14 @@ public:
   float getIntegral() {
     return integral;
   }
+
+  // Get current output value
   float getOutput() {
     return output;
+  }
+
+  // Get derivative filter coefficient
+  float getDerivativeFilter() {
+    return derivativeFilterCoeff;
   }
 };

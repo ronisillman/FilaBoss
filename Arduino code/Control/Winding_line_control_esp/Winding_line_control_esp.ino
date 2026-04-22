@@ -197,7 +197,7 @@ const unsigned long POSITION_SYNC_PERIOD_MS = 20;
 const unsigned long DIAGNOSE_CALL_PERIOD_MS = 1000;
 const unsigned long FAN_MEASUREMENT_PERIOD_MS = 500;
 const unsigned long TMC_STATUS_PERIOD_MS = 200;
-const unsigned long STOP_TIMEOUT_MS = 300;
+const unsigned long STOP_TIMEOUT_US = 300000; // 300ms in microseconds
 const unsigned long RASPBERRY_TELEMETRY_PERIOD_MS = 50;
 const unsigned long RASPBERRY_COMMAND_TIMEOUT_MS = 1000;
 const float FAN_TACH_PULSES_PER_REV = 2.0f;
@@ -294,8 +294,8 @@ void setup() {
             prevPcntCount = initialEncoderCount;
         }
     }
-    encoderPrevTime = millis(); // Initialize encoder timestamp to current time
-    lastEncoderPeriod = 100; // Initialize to reasonable default period (~10 Hz)
+    encoderPrevTime = micros(); // Initialize encoder timestamp to current time
+    lastEncoderPeriod = 100000; // Initialize to reasonable default period (~10 Hz) in microseconds
     lastDistanceUpdateMs = millis();
 }
 
@@ -1005,11 +1005,11 @@ void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
 
 /// @brief Interrupt service routine to count encoder pulses and calculate speed.
 void updateSpeedByPulse() {
-    unsigned long currentTime = millis();
-    unsigned long period = currentTime - encoderPrevTime; // Time since last pulse in milliseconds
+    unsigned long currentTime = micros();
+    unsigned long period = currentTime - encoderPrevTime; // Time since last pulse in microseconds
     if (period == 0) return; // Avoid division by zero, should not happen with proper timing
     // With CHANGE interrupt on channel A, we get 2 edges per encoder pulse.
-    float revPerSec = 1000.0f / ((float)period * encoderResolution * encoderEdgesPerPulse); // revolutions per second
+    float revPerSec = 1000000.0f / ((float)period * encoderResolution * encoderEdgesPerPulse); // revolutions per second
     float rawSpeed = revPerSec * (2.0f * PI * rollerRadius); // Calculate speed in m/s based on roller radius
     rawSpeed *= speedCal;
     speed += SpeedFilterAlpha * (rawSpeed - speed); // Apply low-pass filter to smooth speed measurement
@@ -1020,21 +1020,21 @@ void updateSpeedByPulse() {
 }
 
 void decaySpeed() {
-    unsigned long currentTime = millis();
-    unsigned long gap_period = currentTime - encoderPrevTime; // Time since last pulse in milliseconds
+    unsigned long currentTime = micros();
+    unsigned long gap_period = currentTime - encoderPrevTime; // Time since last pulse in microseconds
 
     if (!hasValidPulse) {
         speed = 0.0;
         return;
     }
 
-    if (gap_period > STOP_TIMEOUT_MS) {
+    if (gap_period > STOP_TIMEOUT_US) {
         speed = 0.0;
         return;
     }
 
     if (gap_period > lastEncoderPeriod){ // Wait for a full period to elapse before decaying speed, ensures we only decay after missing a pulse
-    float revPerSec = 1000.0 / ((float)gap_period * encoderResolution * encoderEdgesPerPulse); // Match encoder edge counting in ISR
+    float revPerSec = 1000000.0 / ((float)gap_period * encoderResolution * encoderEdgesPerPulse); // Match encoder edge counting in ISR
     float rawSpeed = revPerSec * (2.0 * PI * rollerRadius); // Calculate raw speed in m/s based on roller radius
     rawSpeed *= speedCal;
     speed += SpeedFilterAlpha * (rawSpeed - speed); // Apply low-pass filter to smooth speed measurement
