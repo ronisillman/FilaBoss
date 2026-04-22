@@ -612,8 +612,10 @@ def main() -> None:
             if now >= next_telemetry_apply_time:
                 if pending_esp_telemetry is not None:
                     pending_esp_telemetry.apply_to_controller(controller)
+                    pending_esp_telemetry = None
                 if pending_diameter is not None:
                     pending_diameter.apply_to_controller(controller)
+                    pending_diameter = None
                 next_telemetry_apply_time = now + telemetry_apply_period
 
             for event in events:
