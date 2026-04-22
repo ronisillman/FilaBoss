@@ -283,9 +283,6 @@ void setup() {
     PulleyPID.setOutputLimits(0, DAC_maxValue*0.6); // Set output limits for roller motor control
     DiameterPID.setOutputLimits(0.0f, 0.02f); // Outer loop: output is speed reference (m/s) fed into PulleyPID
 
-    // Run calibration 
-    //HomingAndCalibration(5000, 100); // Run calibration for 5 seconds per motor, sampling every 100 ms
-
     //New speed mesurement test
     delay(100); // Short delay to ensure everything is initialized before starting speed measurement
     if (encoderPcntReady) {
@@ -965,42 +962,6 @@ void pinSetup() {
     pinMode(switchManualPin, INPUT);
     pinMode(switchLoadPin, INPUT); 
     pinMode(fanRSpeedPin, INPUT);
-}
-
-/// @brief Perform homing and no-load current calibration for the filament guide system.
-/// @param calibrationTime_ms Duration in milliseconds for which to run the no-load current calibration. 
-/// @param sampleInterval_ms Interval in milliseconds between current samples during calibration.
-void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
-    Serial.println("Starting no-load current calibration...");    
-    bool calibrated = true;
-
-    unsigned long calibStartTime = millis();
-    unsigned long millisPrev = 0;
-
-    float calib_spool_sum = 0.0;
-    int calib_spool_samples = 0;
-    analogWrite(motorSpoolPin, (int)DAC_maxValue); // Run spool at full speed for calibration
-
-    while (!calibrated) {
-        unsigned long millisCurrent = millis();
-
-        if (!calibrated){
-            // Sample current at regular intervals during calibration period
-            if (millisCurrent - calibStartTime >= (unsigned long)calibrationTime_ms) {
-                calibrated = true;
-                noLoadCurrent_Spool = calib_spool_sum / calib_spool_samples;
-                Serial.print("Spool no-load current: ");
-                Serial.print(noLoadCurrent_Spool);
-                Serial.println(" mA");
-            }
-            // Accumulate current samples for calibration
-            if (millisCurrent - millisPrev >= (unsigned long)sampleInterval_ms) {
-                calib_spool_sum += ina219_spool.getCurrent_mA();
-                calib_spool_samples++;
-                millisPrev = millisCurrent;
-            }
-        }
-    }
 }
 
 /// @brief Interrupt service routine to count encoder pulses and calculate speed.
