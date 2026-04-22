@@ -341,12 +341,12 @@ void loop() {
             if (guideMovingTowardMax && LOAD_IDLE == loadState) {
                 commandedAbsSpeed = fabs(computeGuideSpeedHz(resumeSpeed));
                 if (commandedAbsSpeed < 1.0) commandedAbsSpeed = 1.0;
-                guideStepper->setSpeedInHz(commandedAbsSpeed);
+                guideStepper->setSpeedInHz((uint32_t)commandedAbsSpeed);
                 guideStepper->moveTo((int32_t)guideMaxPositionSteps);
             } else if (LOAD_IDLE == loadState) {
                 commandedAbsSpeed = fabs(computeGuideSpeedHz(resumeSpeed));
                 if (commandedAbsSpeed < 1.0) commandedAbsSpeed = 1.0;
-                guideStepper->setSpeedInHz(commandedAbsSpeed);
+                guideStepper->setSpeedInHz((uint32_t)commandedAbsSpeed);
                 guideStepper->moveTo(0);
             }
             Serial.println("Continuing normal operation.");
@@ -504,14 +504,14 @@ float computePulleyControlSignal(float setSpeed, float actualSpeed, bool forceSp
 }
 
 void motorControl(float setSpeed, float actualSpeed) {
-    int controlSignal_Roller;
+    float controlSignal_Roller;
     if (setSpeed == 0.0f && strcmp(raspberryCommands.target_mode, "Spd") == 0) {
         controlSignal_Roller = 0;
     } else {
         controlSignal_Roller = computePulleyControlSignal(setSpeed, actualSpeed);
     }
 
-    int controlSignal_Spool;
+    float controlSignal_Spool;
     if (SetTorqueCurrent == 0.0) {
         controlSignal_Spool = 0;
     } else {
@@ -521,8 +521,8 @@ void motorControl(float setSpeed, float actualSpeed) {
         controlSignal_Spool = SpoolPID.compute(torqueCurrent);
     }
 
-    analogWrite(motorRollerPin, controlSignal_Roller);
-    analogWrite(motorSpoolPin, controlSignal_Spool);
+    analogWrite(motorRollerPin, (int)roundf(controlSignal_Roller));
+    analogWrite(motorSpoolPin, (int)roundf(controlSignal_Spool));
 }
 
 double computeGuideSpeedHz(double filamentSpeedMps) {
@@ -541,7 +541,8 @@ void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
     (void)microsCurrent;
 
     commandedAbsSpeed = fabs(computeGuideSpeedHz(filamentSpeed));
-    guideStepper->setSpeedInHz(commandedAbsSpeed);
+    if (commandedAbsSpeed < 1.0) commandedAbsSpeed = 1.0;  //remove clamping if it causes problems
+    guideStepper->setSpeedInHz((uint32_t)commandedAbsSpeed);
 
     if (guideStepper->isRunning()) {
         guideEndpointHandled = false;
@@ -571,7 +572,7 @@ void enterLoadMode() {
     guideStepper->setSpeedInHz((uint32_t)STEPPER_MAX_SPEED);
     guideStepper->runForward();
     analogWrite(motorSpoolPin, 0); // spool stands still in load mode
-    analogWrite(motorRollerPin, computePulleyControlSignal(targetSpeed, speed, true)); // load mode always uses speed PID for pulley
+    analogWrite(motorRollerPin, (int)roundf(computePulleyControlSignal(targetSpeed, speed, true))); // load mode always uses speed PID for pulley
 }
 
 void exitLoadMode(bool keepStopped) {
@@ -608,7 +609,7 @@ void updateLoadMode(unsigned long microsCurrent) {
     switch (loadState) {
         case LOAD_HOMING: {
             analogWrite(motorSpoolPin, 0); // spool stands still in load mode
-            analogWrite(motorRollerPin, computePulleyControlSignal(targetSpeed, speed, true)); // load mode always uses speed PID for pulley
+            analogWrite(motorRollerPin, (int)roundf(computePulleyControlSignal(targetSpeed, speed, true))); // load mode always uses speed PID for pulley
 
             // Stop when low/home limit is reached.
             if (digitalRead(limitSwitchLowPin) == HIGH) {
@@ -623,7 +624,7 @@ void updateLoadMode(unsigned long microsCurrent) {
 
         case LOAD_MOVE_TO_INITIAL:
             analogWrite(motorSpoolPin, 0); // spool stands still in load phase
-            analogWrite(motorRollerPin, computePulleyControlSignal(targetSpeed, speed, true)); // keep pulley control active while guide moves to initial point
+            analogWrite(motorRollerPin, (int)roundf(computePulleyControlSignal(targetSpeed, speed, true))); // keep pulley control active while guide moves to initial point
 
             // Non-blocking move completion keeps UART2 polling/telemetry running.
             if (!guideStepper->isRunning()) {
@@ -636,7 +637,7 @@ void updateLoadMode(unsigned long microsCurrent) {
         case LOAD_WAIT_PHASE:
             setGuideDriverCurrent(GUIDE_TMC_HOLD_CURRENT_MA);
             analogWrite(motorSpoolPin, 0); // spool stands still in load phase
-            analogWrite(motorRollerPin, computePulleyControlSignal(targetSpeed, speed, true)); // load mode always uses speed PID for pulley
+            analogWrite(motorRollerPin, (int)roundf(computePulleyControlSignal(targetSpeed, speed, true))); // load mode always uses speed PID for pulley
             break;
 
         case LOAD_IDLE:
@@ -977,7 +978,7 @@ void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
 
     float calib_spool_sum = 0.0;
     int calib_spool_samples = 0;
-    analogWrite(motorSpoolPin, DAC_maxValue); // Run spool at full speed for calibration
+    analogWrite(motorSpoolPin, (int)DAC_maxValue); // Run spool at full speed for calibration
 
     while (!calibrated) {
         unsigned long millisCurrent = millis();

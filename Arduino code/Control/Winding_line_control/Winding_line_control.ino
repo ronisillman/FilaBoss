@@ -361,63 +361,6 @@ void pinSetup() {
     */
 }
 
-/// @brief Perform homing and no-load current calibration for the filament guide system.
-/// @param calibrationTime_ms Duration in milliseconds for which to run the no-load current calibration. 
-/// @param sampleInterval_ms Interval in milliseconds between current samples during calibration.
-void HomingAndCalibration(int calibrationTime_ms, int sampleInterval_ms) {
-    Serial.println("Starting no-load current calibration and guide homing...");    
-    // Non-blocking calibration state and functions
-    bool calibrated = true;
-    bool homed = false;
-
-    unsigned long calibStartTime = millis();
-    unsigned long millisPrev = 0;
-
-    float calib_spool_sum = 0.0;
-    int calib_spool_samples = 0;
-
-    stepDirection = LOW; // Set initial direction towards the limit switch
-    digitalWrite(dirPin, stepDirection); // Set direction towards the limit switch
-    analogWrite(motorSpoolPin, DAC_maxValue); // Run spool at full speed for calibration
-
-    while (!calibrated || !homed) {
-        unsigned long millisCurrent = millis();
-        unsigned long microsCurrent = micros();
-
-        if (!calibrated){
-            // Sample current at regular intervals during calibration period
-            if (millisCurrent - calibStartTime >= (unsigned long)calibrationTime_ms) {
-                calibrated = true;
-                noLoadCurrent_Spool = calib_spool_sum / calib_spool_samples;
-                Serial.print("Spool no-load current: ");
-                Serial.print(noLoadCurrent_Spool);
-                Serial.println(" mA");
-            }
-            // Accumulate current samples for calibration
-            if (millisCurrent - millisPrev >= (unsigned long)sampleInterval_ms) {
-                calib_spool_sum += ina219_spool.getCurrent_mA();
-                calib_spool_samples++;
-                millisPrev = millisCurrent;
-            }
-        }
-        // Handle homing towards the limit switch
-        if (!homed) {
-            if (digitalRead(limitSwitchHighPin) == LOW && digitalRead(limitSwitchLowPin) == HIGH) { // If limit switch is not triggered, continue homing
-                if (microsCurrent - microsPrevStep >= ApproachStepInterval) {
-                    digitalWrite(stepPin, !digitalRead(stepPin)); // Toggle step pin
-                }
-            }
-            else {
-                homed = true; // Limit switch triggered, homing complete
-                Serial.println("Homing complete.");
-                stepDirection = !stepDirection; 
-                digitalWrite(dirPin, stepDirection); // Set direction for normal operation
-            }
-        }
-        microsPrevStep = microsCurrent;
-    }
-}
-
 /// @brief Interrupt service routine to count encoder pulses and calculate speed.
 void updateSpeedByPulse() {
     unsigned long currentTime = millis();
