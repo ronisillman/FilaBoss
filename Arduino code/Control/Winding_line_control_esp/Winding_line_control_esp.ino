@@ -496,7 +496,7 @@ float computePulleyControlSignal(float setSpeed, float actualSpeed, bool forceSp
         float targetDiameter = constrain(raspberryCommands.target_diameter_mm, 0.5f, 5.0f);
         float measuredDiameter = constrain(raspberryCommands.measured_diameter_mm, 0.5f, 5.0f);
         RollerDiameterPID.setSetpoint(targetDiameter);
-        return RollerDiameterPID.compute(measuredDiameter);
+        setSpeed = RollerDiameterPID.compute(measuredDiameter);
     }
 
     RollerPID.setSetpoint(setSpeed); // Speed mode uses measured filament speed feedback
