@@ -475,12 +475,6 @@ void diagnose() {
     Serial.print(speed * 1000.0f, 2);
     Serial.print(", Target speed (mm/s): ");
     Serial.print(targetSpeed * 1000.0f, 2);
-    Serial.print(", Spool current (mA): ");
-    Serial.print(SpoolMotorCurrent, 2);
-    Serial.print(", Spool current target (mA): ");
-    Serial.print(SetTorqueCurrent, 2);
-    Serial.print("Fan RPM: ");
-    Serial.print(fanRpm, 1);
     Serial.println();
 }
 
