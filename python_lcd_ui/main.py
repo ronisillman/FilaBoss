@@ -63,6 +63,7 @@ class TelemetryFromEsp32:
         state.fan_rpm = self.fan_rpm
         state.diameter_travelled_mm = self.diameter_travelled_mm
         state.spool_current_ma = self.spool_current_ma
+        state.esp_last_received = time.monotonic()
 
 
 @dataclass
@@ -105,6 +106,7 @@ class DiameterFromVision:
         mean_diameter_mm = (self.top_mm + self.middle_mm + self.bottom_mm) / 3.0
         if math.isfinite(mean_diameter_mm):
             controller.state.filament_diameter_mm = round(mean_diameter_mm, 3)
+        controller.state.vision_last_received = time.monotonic()
 
 
 @dataclass

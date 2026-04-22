@@ -53,18 +53,31 @@ class AppState:
         )
     )
     pid_motor_index: int = 0
+    # Monotonic timestamps of last received data from each source (None = never received).
+    esp_last_received: float | None = None
+    vision_last_received: float | None = None
 
 
 class UiController:
     """UI logic independent from display/input implementation."""
 
     menus = ["MAIN", "CONTROL", "PID"]
+    # A source is considered stale if no data has arrived within this many seconds.
+    _STALE_TIMEOUT = 3.0
 
     def __init__(self, cols: int = 20, rows: int = 4) -> None:
         self.cols = cols
         self.rows = rows
         self.state = AppState()
         self._start = time.monotonic()
+
+    def _esp_fresh(self) -> bool:
+        ts = self.state.esp_last_received
+        return ts is not None and (time.monotonic() - ts) < self._STALE_TIMEOUT
+
+    def _vision_fresh(self) -> bool:
+        ts = self.state.vision_last_received
+        return ts is not None and (time.monotonic() - ts) < self._STALE_TIMEOUT
 
     def handle_event(self, event: InputEvent) -> bool:
         if event.kind == "quit":
@@ -203,7 +216,12 @@ class UiController:
         if not simulate_feedback:
             return
 
-        elapsed = time.monotonic() - self._start
+        now = time.monotonic()
+        # Mark both sources as fresh so simulated values are always displayed.
+        self.state.esp_last_received = now
+        self.state.vision_last_received = now
+
+        elapsed = now - self._start
         diameter_wave = 1.75 + math.sin(elapsed * 0.35) * 0.02
         fan_trim = (self.state.fan_speed_pct - 50) * 0.02
         self.state.filament_diameter_mm = diameter_wave
@@ -300,9 +318,12 @@ class UiController:
             editing=target_editing,
         )
 
+        dia_text = f"{self.state.filament_diameter_mm:4.2f} mm" if self._vision_fresh() else " N/A    "
+        spd_text = f"{self.state.pulley_speed_mps:4.1f} mm/s" if self._esp_fresh() else " N/A    "
+
         return [
-            f"Dia: {self.state.filament_diameter_mm:4.2f} mm",
-            f"Spd: {self.state.pulley_speed_mps:4.1f} mm/s",
+            f"Dia: {dia_text}",
+            f"Spd: {spd_text}",
             f"M:{mode_value} Trgt:{target_value}",
         ]
 
@@ -344,7 +365,7 @@ class UiController:
                 editing=(self.state.menu_edit and self.state.edit_target == "MOTOR"),
                 blink_on=blink_on,
             ),
-            f"{self._pid_gain_segment('P', gains.p, p_digit, p_dot, blink_on, focused=(focus_item == 'P' and not self.state.menu_edit))} {self._pid_gain_segment('I', gains.i, i_digit, i_dot, blink_on, focused=(focus_item == 'I' and not self.state.menu_edit))}",
+            f"{self._pid_gain_segment('P', gains.p, p_digit, p_dot, blink_on, focused=(focus_item == 'P' and not self.state.menu_edit))}{self._pid_gain_segment('I', gains.i, i_digit, i_dot, blink_on, focused=(focus_item == 'I' and not self.state.menu_edit))}",
             self._pid_gain_segment("D", gains.d, d_digit, d_dot, blink_on, focused=(focus_item == "D" and not self.state.menu_edit)),
         ]
     
@@ -384,8 +405,8 @@ class UiController:
         else:
             dia_value = f" {dia_rendered}"
 
-        rpm_text = str(self._fan_speed_rpm())
-        spool_current_text = str(int(round(self.state.spool_current_ma)))
+        rpm_text = str(self._fan_speed_rpm()) if self._esp_fresh() else "N/A"
+        spool_current_text = str(int(round(self.state.spool_current_ma))) if self._esp_fresh() else "N/A"
         fan_line = f"Fan:{fan_slot}Rpm: {rpm_text}"
 
         return [
@@ -396,7 +417,7 @@ class UiController:
 
     def _render_load_mode(self) -> list[str]:
         target_value = f"{self.state.target_speed_tenths / 10.0:4.1f} mm/s"
-        actual_value = f"{self.state.pulley_speed_mps:4.1f} mm/s"
+        actual_value = f"{self.state.pulley_speed_mps:4.1f} mm/s" if self._esp_fresh() else "N/A"
 
         return [
             "Load Mode Active",
@@ -414,13 +435,13 @@ class UiController:
         ]
 
     def _motor_names(self) -> list[str]:
-        return ["Pulley/Dia", "Pulley/Spd", "Spool"]
+        return ["Diameter", "Pulley", "Spool"]
 
     def _current_motor_tag(self) -> str:
         if self.state.pid_motor_index == 0:
-            return "P/D"
+            return "Dia"
         if self.state.pid_motor_index == 1:
-            return "P/S"
+            return "Pul"
         return "Spo"
 
     def _current_motor_name(self) -> str:
@@ -444,10 +465,10 @@ class UiController:
     def _pid_motor_line(self, motor_name: str, focused: bool, editing: bool, blink_on: bool) -> str:
         if editing:
             inner = motor_name if blink_on else " " * len(motor_name)
-            return f"Motor:[{inner}]"
+            return f"Pid:[{inner}]"
         if focused:
-            return f"Motor:{self._focused_bracket(motor_name, blink_on)}"
-        return f"Motor: {motor_name}"
+            return f"Pid:{self._focused_bracket(motor_name, blink_on)}"
+        return f"Pid: {motor_name} "
 
     def _active_digit_for_label(self, label: str) -> int | None:
         if not self.state.menu_edit or self.state.edit_target != label:
@@ -562,7 +583,7 @@ class UiController:
             return f"{label}:{rendered}"
         if focused:
             return f"{label}:{self._focused_bracket(rendered, blink_on)}"
-        return f"{label}: {rendered}"
+        return f"{label}: {rendered} "
 
     def _pid_motor_prefix(self, motor_tag: str, focused: bool, editing: bool) -> str:
         blink_on = self._blink_on()

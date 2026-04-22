@@ -281,7 +281,7 @@ void setup() {
     SpoolPID.setOutputLimits(0, DAC_maxValue); // Set output limits for spool motor control
     //12V motor
     PulleyPID.setOutputLimits(0, DAC_maxValue*0.6); // Set output limits for roller motor control
-    DiameterPID.setOutputLimits(0.0f, 0.02f); // Outer loop: output is speed reference (m/s) fed into PulleyPID
+    DiameterPID.setOutputLimits(0.006f, 0.02f); // Outer loop: output is speed reference (m/s) fed into PulleyPID; min 6 mm/s
 
     //New speed mesurement test
     delay(100); // Short delay to ensure everything is initialized before starting speed measurement
@@ -1052,6 +1052,7 @@ void processSerialInput() {
 }
 
 void initRaspberrySerial() {
+    RaspberrySerial.setRxBufferSize(1024); // Default 256 bytes overflows when Raspberry sends back-to-back packets
     RaspberrySerial.begin(115200, SERIAL_8N1, raspberryPiRXPIn, raspberryPiTXPin);
     raspberrySerialIndex = 0;
     raspberrySerialReady = true;
