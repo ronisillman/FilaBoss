@@ -12,11 +12,11 @@ Adafruit_INA219 ina219_spool(0x41);
 //Adafruit_INA219 ina219_roller(0x40);
 //PID SpoolPID(0.05, 0.15, 0.0); // Initialize PID controller with example gains
 PID SpoolPID(7000, 2500, 5.0);
-//PID RollerPID(1000, 0.3, 0.0); // Initialize PID controller with example gains
-//PID RollerPID(12000, 6000, 300); // for 24 VDC motor
-PID RollerPID(5000, 1500, 5.0); // for 12v dc motor
-PID RollerDiameterPID(-5000, -1500, -5.0); // pulley PID for diameter mode (mm) - negative gains: higher speed = smaller diameter
-//PID RollerPID(10000, 3000, 5.0); // for 12v dc motor
+//PID PulleyPID(1000, 0.3, 0.0); // Initialize PID controller with example gains
+//PID PulleyPID(12000, 6000, 300); // for 24 VDC motor
+PID PulleyPID(5000, 1500, 5.0); // for 12v dc motor
+PID DiameterPID(-5000, -1500, -5.0); // pulley PID for diameter mode (mm) - negative gains: higher speed = smaller diameter
+//PID PulleyPID(10000, 3000, 5.0); // for 12v dc motor
 
 // Board constants
 #define ADC_bits 12.0        // ESP32 has 12-bit ADC
@@ -280,7 +280,8 @@ void setup() {
     // Set output limits for PID controllers
     SpoolPID.setOutputLimits(0, DAC_maxValue); // Set output limits for spool motor control
     //12V motor
-    RollerPID.setOutputLimits(0, DAC_maxValue*0.6); // Set output limits for roller motor control
+    PulleyPID.setOutputLimits(0, DAC_maxValue*0.6); // Set output limits for roller motor control
+    DiameterPID.setOutputLimits(0.0f, 0.02f); // Outer loop: output is speed reference (m/s) fed into PulleyPID
 
     // Run calibration 
     //HomingAndCalibration(5000, 100); // Run calibration for 5 seconds per motor, sampling every 100 ms
@@ -495,12 +496,12 @@ float computePulleyControlSignal(float setSpeed, float actualSpeed, bool forceSp
     if (!forceSpeedMode && strcmp(raspberryCommands.target_mode, "Dia") == 0) {
         float targetDiameter = constrain(raspberryCommands.target_diameter_mm, 0.5f, 5.0f);
         float measuredDiameter = constrain(raspberryCommands.measured_diameter_mm, 0.5f, 5.0f);
-        RollerDiameterPID.setSetpoint(targetDiameter);
-        setSpeed = RollerDiameterPID.compute(measuredDiameter);
+        DiameterPID.setSetpoint(targetDiameter);
+        setSpeed = DiameterPID.compute(measuredDiameter);
     }
 
-    RollerPID.setSetpoint(setSpeed); // Speed mode uses measured filament speed feedback
-    return RollerPID.compute(actualSpeed);
+    PulleyPID.setSetpoint(setSpeed); // Speed mode uses measured filament speed feedback
+    return PulleyPID.compute(actualSpeed);
 }
 
 void motorControl(float setSpeed, float actualSpeed) {
@@ -1183,16 +1184,16 @@ bool parseRaspberryCommands(const char* line) {
 }
 
 void applyRaspberryCommands() {
-    targetSpeed = constrain(raspberryCommands.target_speed_mps, 0.0f, 0.03f);
+    targetSpeed = constrain(raspberryCommands.target_speed_mps, 0.0f, 0.02f);
     setFanDutyPercent((uint8_t)constrain((int)raspberryCommands.fan_speed_pct, 0, 100));
     SetTorqueCurrent = constrain(raspberryCommands.spool_current_target_ma, 0.0f, 995.0f);
 
-    RollerDiameterPID.setTunings(
+    DiameterPID.setTunings(
         -raspberryCommands.pid_p_pulley_dia,
         -raspberryCommands.pid_i_pulley_dia,
         -raspberryCommands.pid_d_pulley_dia
     );
-    RollerPID.setTunings(
+    PulleyPID.setTunings(
         raspberryCommands.pid_p_pulley_spd,
         raspberryCommands.pid_i_pulley_spd,
         raspberryCommands.pid_d_pulley_spd
@@ -1254,7 +1255,7 @@ void parseSerialSetpoints(char* input) {
             currentIn = atof(secondPart);
         }
 
-        float speedInMS = constrain(speedInMmS, 0.0f, 30.0f) / 1000.0f;
+        float speedInMS = constrain(speedInMmS, 0.0f, 20.0f) / 1000.0f;
         targetSpeed = speedInMS;
         SetTorqueCurrent = constrain(currentIn, 0.0f, 200.0f);
         setFanDutyPercent((uint8_t)constrain(fanDutyIn, 0, 100));
@@ -1272,7 +1273,7 @@ void parseSerialSetpoints(char* input) {
         char* valuePtr = input + 1;
         if (*valuePtr == '=') valuePtr++;
         float speedInMmS = atof(valuePtr);
-        float speedInMS = constrain(speedInMmS, 0.0f, 30.0f) / 1000.0f;
+        float speedInMS = constrain(speedInMmS, 0.0f, 20.0f) / 1000.0f;
         targetSpeed = speedInMS;
         Serial.print("Updated speed setpoint (mm/s): ");
         Serial.println(targetSpeed * 1000.0f, 2);
