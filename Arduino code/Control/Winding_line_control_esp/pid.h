@@ -18,7 +18,7 @@ public:
     setpoint = 0.0;
     integral = 0.0;
     previousError = 0.0;
-    lastTime = millis();
+    lastTime = micros();
     outputMin = -255.0;
     outputMax = 255.0;
     output = 0.0;
@@ -44,8 +44,8 @@ public:
 
   // Compute PID output based on current feedback
   float compute(float feedback) {
-    unsigned long currentTime = millis();
-    float deltaTime = (currentTime - lastTime) / 1000.0; // Convert to seconds
+    unsigned long currentTime = micros();
+    float deltaTime = (currentTime - lastTime) / 1000000.0; // Convert to seconds
 
     // Avoid division by zero - return previous output if no time has passed
     if (deltaTime == 0) return output;
@@ -86,7 +86,7 @@ public:
   void reset() {
     integral = 0.0;
     previousError = 0.0;
-    lastTime = millis();
+    lastTime = micros();
   }
 
   // Get current setpoint
