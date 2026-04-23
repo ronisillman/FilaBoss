@@ -18,6 +18,11 @@ PID PulleyPID(5000, 1500, 5.0); // for 12v dc motor
 PID DiameterPID(-5000, -1500, -5.0); // pulley PID for diameter mode (mm) - negative gains: higher speed = smaller diameter
 //PID PulleyPID(10000, 3000, 5.0); // for 12v dc motor
 
+// Feedforward variables for diameter control
+float prevTargetDiameter = 0.0;
+unsigned long prevTargetDiameterTime = 0;
+float feedforwardGain = 0.001; // m/s per (mm/s) of diameter change rate
+
 // Board constants
 #define ADC_bits 12.0        // ESP32 has 12-bit ADC
 #define DAC_bits 8.0
@@ -71,7 +76,7 @@ const float GUIDE_TMC_R_SENSE = 0.11f;
 
 // Filter variables for measurment smoothing
 #define CurrentfilterAlpha 0.02 // Smoothing factor for current measurements
-#define SpeedFilterAlpha 0.01 // Smoothing factor for speed measurements
+#define SpeedFilterAlpha 0.001 // Smoothing factor for speed measurements
 
 #define PCNT_H_LIM 32767
 
@@ -473,8 +478,10 @@ void loop() {
 void diagnose() {
     Serial.print(", Speed (mm/s): ");
     Serial.print(speed * 1000.0f, 2);
-    Serial.print(", Target speed (mm/s): ");
-    Serial.print(targetSpeed * 1000.0f, 2);
+    Serial.print(", spd-PID(%): ");
+    Serial.print(100.0f * PulleyPID.getOutput() / PulleyPID.getOutputMax(), 2); // percentage of max output for roller motor
+    Serial.print(", dia-PID(mm/s): ");
+    Serial.print(DiameterPID.getOutput()*1000.0f, 2);   // diameter control output in mm/s
     Serial.println();
 }
 
@@ -487,8 +494,20 @@ float computePulleyControlSignal(float setSpeed, float actualSpeed, bool forceSp
     if (!forceSpeedMode && strcmp(raspberryCommands.target_mode, "Dia") == 0) {
         float targetDiameter = constrain(raspberryCommands.target_diameter_mm, 0.5f, 5.0f);
         float measuredDiameter = constrain(raspberryCommands.measured_diameter_mm, 0.5f, 5.0f);
+        
+        // Feedforward based on target diameter rate of change
+        unsigned long currentTime = millis();
+        float dt = (currentTime - prevTargetDiameterTime) / 1000.0f;
+        float dTarget_dt = 0.0;
+        if (dt > 0.01f) {
+            dTarget_dt = (targetDiameter - prevTargetDiameter) / dt;
+        }
+        prevTargetDiameter = targetDiameter;
+        prevTargetDiameterTime = currentTime;
+        float feedforward = -feedforwardGain * dTarget_dt; // negative because increasing diameter requires decreasing speed
+        
         DiameterPID.setSetpoint(targetDiameter);
-        setSpeed = DiameterPID.compute(measuredDiameter);
+        setSpeed = DiameterPID.compute(measuredDiameter) + feedforward;
     }
 
     PulleyPID.setSetpoint(setSpeed); // Speed mode uses measured filament speed feedback
