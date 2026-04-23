@@ -114,6 +114,14 @@ public:
     return output;
   }
 
+  // Get current output limits
+  float getOutputMax() {
+    return outputMax;
+  }
+  float getOutputMin() {
+    return outputMin;
+  }
+
   // Get derivative filter coefficient
   float getDerivativeFilter() {
     return derivativeFilterCoeff;
