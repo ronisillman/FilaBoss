@@ -21,7 +21,7 @@ PID DiameterPID(0.0, 0.0, 0.0); // pulley PID for diameter mode (mm) - negative 
 // Feedforward variables for diameter control
 float prevTargetDiameter = 0.0;
 unsigned long prevTargetDiameterTime = 0;
-float pulleyFeedforwardGain = 0.001; // m/s per (mm/s) of diameter change rate
+float PulleyFeedforward = 0.001; // m/s per (mm/s) of diameter change rate
 float DiameterFeedforward = 20e-3;
 // Board constants
 #define ADC_bits 12.0        // ESP32 has 12-bit ADC
@@ -505,7 +505,7 @@ float computePulleyControlSignal(float setSpeed, float actualSpeed, bool forceSp
        
     }
     PulleyPID.setSetpoint(setSpeed); // Speed mode uses measured filament speed feedback
-    return PulleyPID.compute(actualSpeed, pulleyFeedforward * setSpeed); // Feedforward is applied inside the PID
+    return PulleyPID.compute(actualSpeed, PulleyFeedforward * setSpeed); // Feedforward is applied inside the PID
 }
 
 void motorControl(float setSpeed, float actualSpeed) {
