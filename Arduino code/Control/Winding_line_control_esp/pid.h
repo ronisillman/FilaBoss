@@ -57,11 +57,6 @@ public:
     outputMax = maxOut;
   }
 
-  // Set feedforward gain
-  void setFeedforward(float ff_gain) {
-    feedforwardGain = ff_gain;
-  }
-
   float compute(float feedback, float feedforwardInput = 0.0f) {
     unsigned long currentTime = micros();
     float deltaTime = (currentTime - lastTime) / 1000000.0; // Convert to seconds
