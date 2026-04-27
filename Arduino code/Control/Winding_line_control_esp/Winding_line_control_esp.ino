@@ -21,8 +21,8 @@ PID DiameterPID(0.0, 0.0, 0.0); // pulley PID for diameter mode (mm) - negative 
 // Feedforward variables for diameter control
 float prevTargetDiameter = 0.0;
 unsigned long prevTargetDiameterTime = 0;
-float feedforwardGain = 0.001*0.0; // m/s per (mm/s) of diameter change rate
-
+float pulleyFeedforwardGain = 0.001; // m/s per (mm/s) of diameter change rate
+float DiameterFeedforward = 20e-3;
 // Board constants
 #define ADC_bits 12.0        // ESP32 has 12-bit ADC
 #define DAC_bits 8.0
@@ -286,8 +286,8 @@ void setup() {
     SpoolPID.setOutputLimits(0, DAC_maxValue); // Set output limits for spool motor control
     //12V motor
     PulleyPID.setOutputLimits(0, DAC_maxValue*0.6); // Set output limits for roller motor control
-    DiameterPID.setOutputLimits(0.006f, 0.02f); // Outer loop: output is speed reference (m/s) fed into PulleyPID; min 6 mm/s
-    DiameterPID.setFeedforward(-feedforwardGain); // Feedforward term applied to diameter loop
+
+    DiameterPID.setOutputLimits(0.005f, 0.02f); // Outer loop: output is speed reference (m/s) fed into PulleyPID; min 6 mm/s
 
     //New speed mesurement test
     delay(100); // Short delay to ensure everything is initialized before starting speed measurement
@@ -477,12 +477,16 @@ void loop() {
 /// @brief Print diagnostic information to the serial monitor at a specified interval
 /// @param interval The interval in milliseconds between diagnostic prints
 void diagnose() {
-    Serial.print(", Speed (mm/s): ");
+    Serial.print("Speed (mm/s): ");
     Serial.print(speed * 1000.0f, 2);
     Serial.print(", spd-PID(%): ");
     Serial.print(100.0f * PulleyPID.getOutput() / PulleyPID.getOutputMax(), 2); // percentage of max output for roller motor
     Serial.print(", dia-PID(mm/s): ");
     Serial.print(DiameterPID.getOutput()*1000.0f, 2);   // diameter control output in mm/s
+    Serial.print(", dia-FF(mm/s): ");
+    Serial.print(DiameterFeedforward/raspberryCommands.target_diameter_mm*1000.0f, 2); // diameter control feedforward term in mm/s
+    Serial.print(", DiaPIDintegral: ");
+    Serial.print(DiameterPID.getIntegral()*1000.0f, 2);
     Serial.println();
 }
 
@@ -493,25 +497,15 @@ void diagnose() {
 /// TODO: Implement cascaded control to prevent spool and roller speed missmatch
 float computePulleyControlSignal(float setSpeed, float actualSpeed, bool forceSpeedMode = false) {
     if (!forceSpeedMode && strcmp(raspberryCommands.target_mode, "Dia") == 0) {
+        //NOTE: Millimeters not meters
         float targetDiameter = constrain(raspberryCommands.target_diameter_mm, 0.5f, 5.0f);
         float measuredDiameter = constrain(raspberryCommands.measured_diameter_mm, 0.5f, 5.0f);
-        
-        // Feedforward based on target diameter rate of change
-        unsigned long currentTime = millis();
-        float dt = (currentTime - prevTargetDiameterTime) / 1000.0f;
-        float dTarget_dt = 0.0;
-        if (dt > 0.01f) {
-            dTarget_dt = (targetDiameter - prevTargetDiameter) / dt;
-        }
-        prevTargetDiameter = targetDiameter;
-        prevTargetDiameterTime = currentTime;
-        
         DiameterPID.setSetpoint(targetDiameter);
-        setSpeed = DiameterPID.compute(measuredDiameter, dTarget_dt);
+        setSpeed = DiameterPID.compute(measuredDiameter, DiameterFeedforward / targetDiameter); // Feedforward is applied inside the PID compute function based on diameter change rate
+       
     }
-
     PulleyPID.setSetpoint(setSpeed); // Speed mode uses measured filament speed feedback
-    return PulleyPID.compute(actualSpeed);
+    return PulleyPID.compute(actualSpeed, pulleyFeedforward * setSpeed); // Feedforward is applied inside the PID
 }
 
 void motorControl(float setSpeed, float actualSpeed) {
