@@ -38,6 +38,11 @@ public:
     previousFilteredDerivative = 0.0; // Reset filter state: old state was scaled by previous kd
   }
 
+  // Get PID tuning parameters
+  float getKp() { return kp; }
+  float getKi() { return ki; }
+  float getKd() { return kd; }
+
   // Set derivative filter coefficient (0.0-1.0, lower = more smoothing)
   void setDerivativeFilter(float filterCoeff) {
     derivativeFilterCoeff = constrain(filterCoeff, 0.01, 1.0);
@@ -64,12 +69,7 @@ public:
     return feedforwardGain;
   }
 
-  // Compute PID output based on current feedback with optional feedforward contribution
-  float compute(float feedback) {
-    return compute(feedback, 0.0f);
-  }
-
-  float compute(float feedback, float feedforwardInput) {
+  float compute(float feedback, float feedforwardInput = 0.0f) {
     unsigned long currentTime = micros();
     float deltaTime = (currentTime - lastTime) / 1000000.0; // Convert to seconds
 
