@@ -10,15 +10,13 @@ private:
   float outputMin, outputMax, output;
   float derivativeFilterCoeff;  // Filter coefficient for derivative smoothing (0.1-1.0)
   float previousFilteredDerivative;  // Previous filtered derivative value
-  float feedforwardGain;
 
 public:
   // Constructor
-  PID(float kp_val = 0.0, float ki_val = 0.0, float kd_val = 0.0, float ff_val = 0.0) {
+  PID(float kp_val = 0.0, float ki_val = 0.0, float kd_val = 0.0) {
     kp = kp_val;
     ki = ki_val;
     kd = kd_val;
-    feedforwardGain = ff_val;
     setpoint = 0.0;
     integral = 0.0;
     previousError = 0.0;
@@ -64,11 +62,6 @@ public:
     feedforwardGain = ff_gain;
   }
 
-  // Get feedforward gain
-  float getFeedforward() {
-    return feedforwardGain;
-  }
-
   float compute(float feedback, float feedforwardInput = 0.0f) {
     unsigned long currentTime = micros();
     float deltaTime = (currentTime - lastTime) / 1000000.0; // Convert to seconds
@@ -85,9 +78,15 @@ public:
     float proportional = kp * error;
 
     // Integral term with anti-windup
-    integral += ki * error * deltaTime;
-    if (integral > outputMax) integral = outputMax;
-    if (integral < outputMin) integral = outputMin;
+    if (output > outputMin && output < outputMax) {
+      integral += ki * error * deltaTime;
+    }
+    else if (output >= outputMax && ki*error < 0) {
+      integral += ki * error * deltaTime; // Allow integral to reduce output if we're above max
+    }
+    else if (output <= outputMin && ki*error > 0) {
+      integral += ki * error * deltaTime; // Allow integral to increase output if we're below min
+    }
 
     // Derivative term with filtering
     float rawDerivative = kd * (error - previousError) / deltaTime;
@@ -98,12 +97,10 @@ public:
     previousError = error;
 
     // Calculate output with feedforward
-    output = proportional + integral + derivative + feedforwardGain * feedforwardInput;
+    output = proportional + integral + derivative + feedforwardInput;
 
     // Limit output
-    if (output > outputMax) output = outputMax;
-    if (output < outputMin) output = outputMin;
-
+    output = constrain(output, outputMin, outputMax);
     return output;
   }
 
