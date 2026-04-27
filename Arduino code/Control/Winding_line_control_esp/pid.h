@@ -10,13 +10,15 @@ private:
   float outputMin, outputMax, output;
   float derivativeFilterCoeff;  // Filter coefficient for derivative smoothing (0.1-1.0)
   float previousFilteredDerivative;  // Previous filtered derivative value
+  float feedforwardGain;
 
 public:
   // Constructor
-  PID(float kp_val = 0.0, float ki_val = 0.0, float kd_val = 0.0) {
+  PID(float kp_val = 0.0, float ki_val = 0.0, float kd_val = 0.0, float ff_val = 0.0) {
     kp = kp_val;
     ki = ki_val;
     kd = kd_val;
+    feedforwardGain = ff_val;
     setpoint = 0.0;
     integral = 0.0;
     previousError = 0.0;
@@ -52,8 +54,22 @@ public:
     outputMax = maxOut;
   }
 
-  // Compute PID output based on current feedback
+  // Set feedforward gain
+  void setFeedforward(float ff_gain) {
+    feedforwardGain = ff_gain;
+  }
+
+  // Get feedforward gain
+  float getFeedforward() {
+    return feedforwardGain;
+  }
+
+  // Compute PID output based on current feedback with optional feedforward contribution
   float compute(float feedback) {
+    return compute(feedback, 0.0f);
+  }
+
+  float compute(float feedback, float feedforwardInput) {
     unsigned long currentTime = micros();
     float deltaTime = (currentTime - lastTime) / 1000000.0; // Convert to seconds
 
@@ -81,8 +97,8 @@ public:
     // Store error for next iteration
     previousError = error;
 
-    // Calculate output
-    output = proportional + integral + derivative;
+    // Calculate output with feedforward
+    output = proportional + integral + derivative + feedforwardGain * feedforwardInput;
 
     // Limit output
     if (output > outputMax) output = outputMax;

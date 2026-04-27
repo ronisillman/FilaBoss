@@ -21,7 +21,7 @@ PID DiameterPID(-5000, -1500, -5.0); // pulley PID for diameter mode (mm) - nega
 // Feedforward variables for diameter control
 float prevTargetDiameter = 0.0;
 unsigned long prevTargetDiameterTime = 0;
-float feedforwardGain = 0.001; // m/s per (mm/s) of diameter change rate
+float feedforwardGain = 0.001*0.0; // m/s per (mm/s) of diameter change rate
 
 // Board constants
 #define ADC_bits 12.0        // ESP32 has 12-bit ADC
@@ -287,6 +287,7 @@ void setup() {
     //12V motor
     PulleyPID.setOutputLimits(0, DAC_maxValue*0.6); // Set output limits for roller motor control
     DiameterPID.setOutputLimits(0.006f, 0.02f); // Outer loop: output is speed reference (m/s) fed into PulleyPID; min 6 mm/s
+    DiameterPID.setFeedforward(-feedforwardGain); // Feedforward term applied to diameter loop
 
     //New speed mesurement test
     delay(100); // Short delay to ensure everything is initialized before starting speed measurement
@@ -504,10 +505,9 @@ float computePulleyControlSignal(float setSpeed, float actualSpeed, bool forceSp
         }
         prevTargetDiameter = targetDiameter;
         prevTargetDiameterTime = currentTime;
-        float feedforward = -feedforwardGain * dTarget_dt; // negative because increasing diameter requires decreasing speed
         
         DiameterPID.setSetpoint(targetDiameter);
-        setSpeed = DiameterPID.compute(measuredDiameter) + feedforward;
+        setSpeed = DiameterPID.compute(measuredDiameter, dTarget_dt);
     }
 
     PulleyPID.setSetpoint(setSpeed); // Speed mode uses measured filament speed feedback
