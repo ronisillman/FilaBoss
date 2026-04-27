@@ -10,13 +10,13 @@
 //two current sensors
 Adafruit_INA219 ina219_spool(0x41);
 //Adafruit_INA219 ina219_roller(0x40);
-//PID SpoolPID(0.05, 0.15, 0.0); // Initialize PID controller with example gains
-PID SpoolPID(7000, 2500, 5.0);
-//PID PulleyPID(1000, 0.3, 0.0); // Initialize PID controller with example gains
-//PID PulleyPID(12000, 6000, 300); // for 24 VDC motor
-PID PulleyPID(5000, 1500, 5.0); // for 12v dc motor
-PID DiameterPID(-5000, -1500, -5.0); // pulley PID for diameter mode (mm) - negative gains: higher speed = smaller diameter
-//PID PulleyPID(10000, 3000, 5.0); // for 12v dc motor
+//PID SpoolPID(7000, 2500, 5.0);
+//PID PulleyPID(5000, 1500, 5.0);
+//PID DiameterPID(-5000, -1500, -5.0); // pulley PID for diameter mode (mm) - negative gains: higher speed = smaller diameter
+
+PID SpoolPID(0.0, 0.0, 0.0);
+PID PulleyPID(0.0, 0.0, 0.0);
+PID DiameterPID(0.0, 0.0, 0.0); // pulley PID for diameter mode (mm) - negative gains: higher speed = smaller diameter
 
 // Feedforward variables for diameter control
 float prevTargetDiameter = 0.0;
