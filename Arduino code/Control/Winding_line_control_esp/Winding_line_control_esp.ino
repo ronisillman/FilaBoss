@@ -7,27 +7,27 @@
 #include "pid.h"
 #include "driver/pulse_cnt.h"
 
-//two current sensors
+//Current sensor
 Adafruit_INA219 ina219_spool(0x41);
-//Adafruit_INA219 ina219_roller(0x40);
-//PID SpoolPID(7000, 2500, 5.0);
-//PID PulleyPID(5000, 1500, 5.0);
-//PID DiameterPID(-5000, -1500, -5.0); // pulley PID for diameter mode (mm) - negative gains: higher speed = smaller diameter
 
 PID SpoolPID(0.0, 0.0, 0.0);
 PID PulleyPID(0.0, 0.0, 0.0);
 PID DiameterPID(0.0, 0.0, 0.0); // pulley PID for diameter mode (mm) - negative gains: higher speed = smaller diameter
 
-// Feedforward variables for diameter control
-float prevTargetDiameter = 0.0;
-unsigned long prevTargetDiameterTime = 0;
-float PulleyFeedforward = 0.001; // m/s per (mm/s) of diameter change rate
-float DiameterFeedforward = 20e-3;
-// Board constants
-#define ADC_bits 12.0        // ESP32 has 12-bit ADC
-#define DAC_bits 8.0
-const static float ADC_maxValue = pow(2, ADC_bits) - 1; // 4095 for 12-bit ADC
-const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
+// Board and physical constants
+constexpr float ADC_bits = 12.0;        
+constexpr float DAC_bits = 8.0;
+constexpr float spoolRadius = 0.053; //m, start radius of the filament spool
+constexpr float spoolWidth = 0.045; //m, width of the filament spool
+constexpr float rollerRadius = 0.011; //m, radius of the roller in contact with the filament, used for speed calculation
+
+#define encoderEdgesPerPulse 2.0 // encoderPinA interrupt on CHANGE counts both rising and falling edges
+//#define encoderResolution 30.0 //pulses per revolution for the 
+#define encoderResolution 600.0 //pulses per revolution for the encoder, used for speed calculation
+#define PCNT_H_LIM 32767
+
+constexpr float ADC_maxValue = pow(2, ADC_bits) - 1; // 4095 for 12-bit ADC
+constexpr float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 
 // ESP32 pin setup (ESP-WROOM-32 + CP2102 dev board)
 #define motorRollerPin 12 //***
@@ -47,38 +47,144 @@ const static float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
 #define led2Pin 18 // Led 2 //*** 
 #define raspberryPiRXPIn 25 // UART RX pin for Raspberry Pi communication (if needed) //***
 #define raspberryPiTXPin 26 // UART TX pin for Raspberry Pi communication (if needed) //***
+HardwareSerial TMCSerial(1);
+HardwareSerial RaspberrySerial(2);
 
 // TMC2209 UART configuration for guide stepper drivers
 #define tmcRx1Pin 16
 #define tmcTx1Pin 17
 #define tmcBaud 115200
 
+
+// -------------------Stepper and guide Variables-------------------------------
+
 #define stepsPerRev 200.0 // full steps per revolution (NEMA17)
-const float microsteps = 16.0f; // microsteps per full step
+constexpr float microsteps = 16.0f; // microsteps per full step
 
-const uint16_t GUIDE_TMC_RUN_CURRENT_MA = 1000;
-const uint16_t GUIDE_TMC_HOLD_CURRENT_MA = 200;
-const uint16_t GUIDE_TMC_MICROSTEPS = (uint16_t)(microsteps + 0.5f);
-const float GUIDE_TMC_R_SENSE = 0.11f;
+// Calibration variables
+constexpr double guideInitialPosition = 0.0055;
+constexpr float guideMaxPosition = 0.021;
+constexpr float leadScrewPitch = 0.002; //m per revolution
+constexpr float ApproachStepInterval = 1000.0; // microseconds between steps
+constexpr double stepsPerRevolution = stepsPerRev*microsteps;
+constexpr bool GUIDE_DIR_PIN_INVERTED = true; 
 
-#define leadScrewPitch 0.004 //m per revolution (4 mm pitch)
-#define ApproachStepInterval 1000.0 // microseconds between steps
+// Ignore tiny near-zero speed noise when integrating traveled distance.
+constexpr float SPEED_DEADBAND_MPS = 0.0002f; // 0.2 mm/s
+constexpr float STEPPER_MAX_SPEED = 8000.0f;
+constexpr float STEPPER_MAX_ACCELERATION = 10000.0f;
 
-#define guideMaxPosition 0.02 //m, 5 cm guide travel like standalone test
-#define spoolRadius 0.053 //m, start radius of the filament spool
-#define spoolWidth 0.045 //m, width of the filament spool
+constexpr uint16_t GUIDE_TMC_RUN_CURRENT_MA = 1000;
+constexpr uint16_t GUIDE_TMC_HOLD_CURRENT_MA = 200;
+constexpr uint16_t GUIDE_TMC_MICROSTEPS = (uint16_t)(microsteps + 0.5f);
+constexpr float GUIDE_TMC_R_SENSE = 0.11f;
 
-#define rollerRadius 0.0119 //m, radius of the roller in contact with the filament, used for speed calculation
-#define encoderEdgesPerPulse 2.0 // encoderPinA interrupt on CHANGE counts both rising and falling edges
+// Stepper memory and timing variables
+bool guideMovingTowardMax = false;
+bool guideEndpointHandled = false;
+long lastStepperPosSteps = 0;
+long guideMaxPositionSteps = 0;
+volatile double guidePosition = 0.0; //m, current position of the filament guide
+long guideInitialPosSteps = 0;
+uint16_t guideDriverCurrentmA = 0;
+//uint32_t guideDriverStatusRaw = 0;
+//bool guideDriverOtpw = false;
+//bool guideDriverOt = false;
 
-//#define encoderResolution 30.0 //pulses per revolution for the 
-#define encoderResolution 600.0 //pulses per revolution for the encoder, used for speed calculation
+volatile unsigned long limit_triggered = 0;
+bool LimitInterruptAttached = true; // Track interrupt attachment state
+volatile bool limitSwitchEvent = false;
 
+//Stepper control objects
+FastAccelStepperEngine stepperEngine = FastAccelStepperEngine();
+FastAccelStepper* guideStepper = nullptr;
+TMC2209Stepper guideDriver(&TMCSerial, GUIDE_TMC_R_SENSE, 0);
+
+
+// ---------------------Current control parameters----------------------------
 // Filter variables for measurment smoothing
-#define CurrentfilterAlpha 0.02 // Smoothing factor for current measurements
-#define SpeedFilterAlpha 0.001 // Smoothing factor for speed measurements
+constexpr float CurrentfilterAlpha = 0.02; // Smoothing factor for current measurements
 
-#define PCNT_H_LIM 32767
+double SetTorqueCurrent = 50; //mA, example torque setpoint for testing
+
+// Calibration variables
+float noLoadCurrent_Spool = 0.0; //mA, base no-load current for spool motor
+float SpoolMotorCurrent = 0.0; //mA, current measurement for spool motor
+
+
+//---------------------Speed and distance measurement variables----------------
+
+//const double speedCal = 500.0 / 703.23f; 
+//constexpr double speedCal = 500.0 / 715.23f;
+constexpr double speedCal = 1; // calibration factor to convert from computed control signal to actual speed in m/s, based on empirical testing with the current setup
+
+// Smoothing factor for speed measurements
+constexpr float SpeedFilterAlpha = 0.001;
+
+// Feedforward variables for diameter control
+float PulleyFeedforward = 0.001; // m/s per (mm/s) of diameter change rate
+float DiameterFeedforward = 20e-3;
+
+// Memory variables for speed calculation
+float targetSpeed = 0.01; //m/s, default desired filament speed
+volatile int layerNumber = 0; //current layer number, used for testing
+double speed = 0.0; //m/s, current speed of the filament, calculated from encoder counts
+double traveledDistance = 0.0;    // m, total distance traveled by the filament, calculated by integrating speed over time
+double commandedAbsSpeed = 0.0; //m/s, absolute value of the desired filament speed, used for stepper speed control
+unsigned long lastDistanceUpdateMs = 0;
+
+
+//----------------------Encoder variables----------------------
+
+unsigned long lastEncoderPeriod = 0;
+unsigned long encoderPrevTime = 0;
+volatile bool encoderPulseEvent = false;
+bool EncoderHasValidPulse = false;
+pcnt_unit_handle_t encoderPcntUnit = nullptr;
+pcnt_channel_handle_t encoderPcntChannel = nullptr;
+int prevEncoderPcntCount = 0;
+bool encoderPcntReady = false;
+
+
+// --------------------- Fan variables----------------------------
+constexpr float FAN_TACH_PULSES_PER_REV = 2.0f;
+
+double fanRpm = 0.0; // RPM
+uint8_t fanDutyPercent = 100; // percent, 0..100
+pcnt_unit_handle_t fanPcntUnit = nullptr;
+pcnt_channel_handle_t fanPcntChannel = nullptr;
+bool fanPcntReady = false;
+
+// ----------------------Communication variables and control flags----------------------
+// Wait for load phase on reset
+bool waitingForLoad = true;
+bool controlPaused = false;
+
+char serialInputBuffer[64];
+uint8_t serialInputIndex = 0;
+
+char raspberrySerialBuffer[768];
+uint16_t raspberrySerialIndex = 0;
+unsigned long lastRaspberryCommandMs = 0;
+
+bool guideDriverUartReady = false;
+bool raspberrySerialReady = false;
+
+
+//-----------------------Control loop timing variables----------------------
+
+// Loop task periods (ms). Keep stepperControl in the fast path every iteration.
+constexpr unsigned long MEASUREMENT_PERIOD_MS = 10;
+constexpr unsigned long DISTANCE_PERIOD_MS = 100;
+constexpr unsigned long SERIAL_INPUT_PERIOD_MS = 100;
+constexpr unsigned long MOTOR_CTRL_PERIOD_MS = 10;
+constexpr unsigned long POSITION_SYNC_PERIOD_MS = 20;
+constexpr unsigned long DIAGNOSE_CALL_PERIOD_MS = 1000;
+constexpr unsigned long FAN_MEASUREMENT_PERIOD_MS = 500;
+constexpr unsigned long TMC_STATUS_PERIOD_MS = 200;
+constexpr unsigned long STOP_TIMEOUT_US = 300000; // 300ms in microseconds
+constexpr unsigned long RASPBERRY_TELEMETRY_PERIOD_MS = 50;
+constexpr unsigned long RASPBERRY_COMMAND_TIMEOUT_MS = 1000;
 
 void IRAM_ATTR StepperLimit();
 void initPCNT();
@@ -102,13 +208,6 @@ void applyRaspberryCommands();
 void sendTelemetryToRaspberry();
 //void updateGuideDriverStatus();
 void initGuideStepper();
-
-FastAccelStepperEngine stepperEngine = FastAccelStepperEngine();
-FastAccelStepper* guideStepper = nullptr;
-HardwareSerial TMCSerial(1);
-HardwareSerial RaspberrySerial(2);
-TMC2209Stepper guideDriver(&TMCSerial, GUIDE_TMC_R_SENSE, 0);
-
 struct TelemetryFromEsp32 {
     bool load_mode;
     bool waiting_for_load;
@@ -136,89 +235,6 @@ struct CommandsToEsp32 {
     float target_speed_mps;
 };
 
-
-const static double stepsPerRevolution = stepsPerRev*microsteps;
-
-volatile double guidePosition = 0.0; //m, current position of the filament guide
-volatile int layerNumber = 0; //current layer number, used for testing
-
-//Test parameters   
-float targetSpeed = 0.01; //m/s, desired filament speed
-double SetTorqueCurrent = 50; //mA, example torque setpoint for testing
-
-// Calibration variables
-float noLoadCurrent_Spool = 0.0; //mA, base no-load current for spool motor
-float SpoolMotorCurrent = 0.0; //mA, current measurement for spool motor
-
-const bool GUIDE_DIR_PIN_INVERTED = true; 
-
-// Stepper timing variables
-bool guideMovingTowardMax = false;
-bool guideEndpointHandled = false;
-
-// Wait for load phase on reset
-bool waitingForLoad = true;
-bool controlPaused = false;
-double commandedAbsSpeed = 0.0; //m/s, absolute value of the desired filament speed, used for stepper speed control
-
-double speed = 0.0; //m/s, current speed of the filament, calculated from encoder counts
-double traveledDistance = 0.0;    // m, total distance traveled by the filament, calculated by integrating speed over time
-
-//Testing new speed measurement
-volatile long encoderTicks = 0;
-volatile uint8_t lastAState = 0;
-int prevPcntCount = 0;
-
-pcnt_unit_handle_t encoderPcntUnit = nullptr;
-pcnt_channel_handle_t encoderPcntChannel = nullptr;
-pcnt_unit_handle_t fanPcntUnit = nullptr;
-pcnt_channel_handle_t fanPcntChannel = nullptr;
-bool encoderPcntReady = false;
-bool fanPcntReady = false;
-
-// Calibration variables
-//const double speedCal = 500.0 / 703.23f; 
-const double speedCal = 500.0 / 715.23f;
-
-// timing variable
-unsigned long lastDiagnoseTime = 0;
-unsigned long lastEncoderPeriod = 0;
-unsigned long encoderPrevTime = 0;
-volatile unsigned long limit_triggered = 0;
-bool interruptAttached = true; // Track interrupt attachment state
-volatile bool limitSwitchEvent = false;
-volatile bool encoderPulseEvent = false;
-bool hasValidPulse = false;
-
-double fanRpm = 0.0; // RPM
-uint8_t fanDutyPercent = 100; // percent, 0..100
-
-// Loop task periods (ms). Keep stepperControl in the fast path every iteration.
-const unsigned long MEASUREMENT_PERIOD_MS = 10;
-const unsigned long DISTANCE_PERIOD_MS = 100;
-const unsigned long SERIAL_INPUT_PERIOD_MS = 100;
-const unsigned long MOTOR_CTRL_PERIOD_MS = 10;
-const unsigned long POSITION_SYNC_PERIOD_MS = 20;
-const unsigned long DIAGNOSE_CALL_PERIOD_MS = 1000;
-const unsigned long FAN_MEASUREMENT_PERIOD_MS = 500;
-const unsigned long TMC_STATUS_PERIOD_MS = 200;
-const unsigned long STOP_TIMEOUT_US = 300000; // 300ms in microseconds
-const unsigned long RASPBERRY_TELEMETRY_PERIOD_MS = 50;
-const unsigned long RASPBERRY_COMMAND_TIMEOUT_MS = 1000;
-const float FAN_TACH_PULSES_PER_REV = 2.0f;
-
-// Ignore tiny near-zero speed noise when integrating traveled distance.
-const float SPEED_DEADBAND_MPS = 0.0002f; // 0.2 mm/s
-const float STEPPER_MAX_SPEED = 8000.0f;
-const float STEPPER_MAX_ACCELERATION = 10000.0f;
-unsigned long lastDistanceUpdateMs = 0;
-char serialInputBuffer[64];
-uint8_t serialInputIndex = 0;
-
-char raspberrySerialBuffer[768];
-uint16_t raspberrySerialIndex = 0;
-unsigned long lastRaspberryCommandMs = 0;
-
 CommandsToEsp32 raspberryCommands = {
     5000.0f,
     1500.0f,
@@ -237,11 +253,6 @@ CommandsToEsp32 raspberryCommands = {
     0.01f,
 };
 
-long lastStepperPosSteps = 0;
-long guideMaxPositionSteps = 0;
-const double guideInitialPosition = 0.0055;
-long guideInitialPosSteps = 0;
-
 enum LoadState {
     LOAD_IDLE = 0,
     LOAD_HOMING,
@@ -250,14 +261,6 @@ enum LoadState {
 };
 
 LoadState loadState = LOAD_IDLE;
-bool guideDriverUartReady = false;
-bool raspberrySerialReady = false;
-
-uint16_t guideDriverCurrentmA = 0;
-//uint32_t guideDriverStatusRaw = 0;
-//bool guideDriverOtpw = false;
-//bool guideDriverOt = false;
-
 
 void setup() {
 
@@ -294,7 +297,7 @@ void setup() {
     if (encoderPcntReady) {
         int initialEncoderCount = 0;
         if (pcnt_unit_get_count(encoderPcntUnit, &initialEncoderCount) == ESP_OK) {
-            prevPcntCount = initialEncoderCount;
+            prevEncoderPcntCount = initialEncoderCount;
         }
     }
     encoderPrevTime = micros(); // Initialize encoder timestamp to current time
@@ -391,7 +394,7 @@ void loop() {
         updateLoadMode(microsCurrent);
     } else {
         if (!controlPaused) {
-            stepperControl(microsCurrent, speed);
+            stepperControl(speed);
         }
     }
 
@@ -408,7 +411,7 @@ void loop() {
             lastStepperPosSteps = 0;
             limit_triggered = currentMillis;
             detachInterrupt(digitalPinToInterrupt(limitSwitchHighPin));
-            interruptAttached = false; // Mark interrupt as detached
+            LimitInterruptAttached = false; // Mark interrupt as detached
         }
     }
 
@@ -468,14 +471,12 @@ void loop() {
     }
 
     // Re-attach interrupt after debounce period, but only if not already attached
-    if (currentMillis - limit_triggered >= 500 && !interruptAttached){
+    if (currentMillis - limit_triggered >= 500 && !LimitInterruptAttached){
         attachInterrupt(digitalPinToInterrupt(limitSwitchHighPin), StepperLimit, CHANGE);
-        interruptAttached = true;
+        LimitInterruptAttached = true;
     }
 }
 
-/// @brief Print diagnostic information to the serial monitor at a specified interval
-/// @param interval The interval in milliseconds between diagnostic prints
 void diagnose() {
     Serial.print("Speed (mm/s): ");
     Serial.print(speed * 1000.0f, 2);
@@ -539,13 +540,8 @@ double computeGuideSpeedHz(double filamentSpeedMps) {
     return hz;
 }
 
-/// @brief 
-/// @param microsCurrent //current time in microseconds for timing control of the stepper motor
-/// @param filamentSpeed //desired filament speed in m/s, used to calculate the required stepper speed for the guide
-void stepperControl(unsigned long microsCurrent, double filamentSpeed) {
-    (void)microsCurrent;
-
-    commandedAbsSpeed = fabs(computeGuideSpeedHz(filamentSpeed));
+void stepperControl(double filamentSpeedMps) {
+    commandedAbsSpeed = fabs(computeGuideSpeedHz(filamentSpeedMps));
     if (commandedAbsSpeed < 1.0) commandedAbsSpeed = 1.0;  //remove clamping if it causes problems
     guideStepper->setSpeedInHz((uint32_t)commandedAbsSpeed);
 
@@ -839,10 +835,10 @@ void pollPcntPulseEvent() {
         return;
     }
 
-    int countDelta = pcntCount - prevPcntCount;
+    int countDelta = pcntCount - prevEncoderPcntCount;
     if (countDelta != 0 && abs(countDelta) < 1000) { // Sanity check to filter out spurious large jumps
         encoderPulseEvent = true;
-        prevPcntCount = pcntCount;
+        prevEncoderPcntCount = pcntCount;
     }
 }
 
@@ -984,14 +980,14 @@ void updateSpeedByPulse() {
     
     lastEncoderPeriod = period;
     encoderPrevTime = currentTime;
-    hasValidPulse = true;
+    EncoderHasValidPulse = true;
 }
 
 void decaySpeed() {
     unsigned long currentTime = micros();
     unsigned long gap_period = currentTime - encoderPrevTime; // Time since last pulse in microseconds
 
-    if (!hasValidPulse) {
+    if (!EncoderHasValidPulse) {
         speed = 0.0;
         return;
     }
