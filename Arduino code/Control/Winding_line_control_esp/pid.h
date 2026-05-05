@@ -72,21 +72,19 @@ public:
     // Proportional term
     float proportional = kp * error;
 
-    // Integral term with anti-windup
-    if (output > outputMin && output < outputMax) {
-      integral += ki * error * deltaTime;
-    }
-    else if (output >= outputMax && ki*error < 0) {
-      integral += ki * error * deltaTime; // Allow integral to reduce output if we're above max
-    }
-    else if (output <= outputMin && ki*error > 0) {
-      integral += ki * error * deltaTime; // Allow integral to increase output if we're below min
-    }
-
     // Derivative term with filtering
     float rawDerivative = kd * (error - previousError) / deltaTime;
     float derivative = previousFilteredDerivative + derivativeFilterCoeff * (rawDerivative - previousFilteredDerivative);
     previousFilteredDerivative = derivative;
+
+    // Integral term with anti-windup: only update if the new output would not drive further into saturation
+    float deltaIntegral = ki * error * deltaTime;
+    float prospectiveIntegral = integral + deltaIntegral;
+    float prospectiveOutput = proportional + prospectiveIntegral + derivative + feedforwardInput;
+    if (!((prospectiveOutput > outputMax && deltaIntegral > 0.0f) ||
+          (prospectiveOutput < outputMin && deltaIntegral < 0.0f))) {
+      integral = prospectiveIntegral;
+    }
 
     // Store error for next iteration
     previousError = error;
