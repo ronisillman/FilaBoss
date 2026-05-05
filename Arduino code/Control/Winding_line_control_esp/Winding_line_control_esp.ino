@@ -352,12 +352,12 @@ void loop() {
             double resumeSpeed = (speed > SPEED_DEADBAND_MPS) ? speed : targetSpeed;
             if (guideMovingTowardMax && LOAD_IDLE == loadState) {
                 commandedAbsSpeed = fabs(computeGuideSpeedHz(resumeSpeed));
-                if (commandedAbsSpeed < 1.0) commandedAbsSpeed = 1.0;
+                //if (commandedAbsSpeed < 1.0) commandedAbsSpeed = 1.0;
                 guideStepper->setSpeedInHz((uint32_t)commandedAbsSpeed);
                 guideStepper->moveTo((int32_t)guideMaxPositionSteps);
             } else if (LOAD_IDLE == loadState) {
                 commandedAbsSpeed = fabs(computeGuideSpeedHz(resumeSpeed));
-                if (commandedAbsSpeed < 1.0) commandedAbsSpeed = 1.0;
+                //if (commandedAbsSpeed < 1.0) commandedAbsSpeed = 1.0;
                 guideStepper->setSpeedInHz((uint32_t)commandedAbsSpeed);
                 guideStepper->moveTo(0);
             }
@@ -568,7 +568,7 @@ double computeGuideSpeedHz(double filamentSpeedMps) {
 
 void stepperControl(double filamentSpeedMps) {
     commandedAbsSpeed = fabs(computeGuideSpeedHz(filamentSpeedMps));
-    if (commandedAbsSpeed < 1.0) commandedAbsSpeed = 1.0;  //remove clamping if it causes problems
+    //if (commandedAbsSpeed < 1.0) commandedAbsSpeed = 1.0;  //remove clamping if it causes problems
     guideStepper->setSpeedInHz((uint32_t)commandedAbsSpeed);
 
     if (guideStepper->isRunning()) {
@@ -622,7 +622,7 @@ void exitLoadMode(bool keepStopped) {
         // speed until stepperControl() corrects it — which only happens once a
         // valid encoder reading is available (~50% of exits had the bug).
         commandedAbsSpeed = fabs(computeGuideSpeedHz(targetSpeed));
-        if (commandedAbsSpeed < 1.0) commandedAbsSpeed = 1.0;
+        //if (commandedAbsSpeed < 1.0) commandedAbsSpeed = 1.0;
         guideStepper->setSpeedInHz((uint32_t)commandedAbsSpeed);
         guideStepper->moveTo((int32_t)guideMaxPositionSteps);
     }
