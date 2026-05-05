@@ -10,9 +10,9 @@
 //Current sensor
 Adafruit_INA219 ina219_spool(0x41);
 
-PID SpoolPID(0.0, 0.0, 0.0);
-PID PulleyPID(0.0, 0.0, 0.0);
-PID DiameterPID(0.0, 0.0, 0.0); // pulley PID for diameter mode (mm) - negative gains: higher speed = smaller diameter
+PID SpoolPID(7.0, 250.0, 5.0);
+PID PulleyPID(30.0, 550.0, 110.0);
+PID DiameterPID(0.00001, 0.00008, 0.00001); // pulley PID for diameter mode (mm) - negative gains: higher speed = smaller diameter
 
 // Board and physical constants
 constexpr float ADC_bits = 12.0;        
@@ -22,9 +22,10 @@ constexpr float spoolWidth = 0.045; //m, width of the filament spool
 constexpr float rollerRadius = 0.011; //m, radius of the roller in contact with the filament, used for speed calculation
 
 #define encoderEdgesPerPulse 2.0 // encoderPinA interrupt on CHANGE counts both rising and falling edges
-//#define encoderResolution 30.0 //pulses per revolution for the 
 #define encoderResolution 600.0 //pulses per revolution for the encoder, used for speed calculation
 #define PCNT_H_LIM 32767
+
+constexpr int defaultMicrosteps = 8; // default microstepping for the guide stepper, used if TMC UART init fails
 
 constexpr float ADC_maxValue = pow(2, ADC_bits) - 1; // 4095 for 12-bit ADC
 constexpr float DAC_maxValue = pow(2, DAC_bits) - 1; // 255 for 8-bit DAC
@@ -58,15 +59,15 @@ HardwareSerial RaspberrySerial(2);
 
 // -------------------Stepper and guide Variables-------------------------------
 
-#define stepsPerRev 200.0 // full steps per revolution (NEMA17)
-constexpr float microsteps = 16.0f; // microsteps per full step
+constexpr int stepsPerRev = 200; // full steps per revolution (NEMA17)
+int microsteps = 16; // microsteps per full step
+double stepsPerRevolution; // Defined in init based on if TMCuart succeeds
 
 // Calibration variables
-constexpr double guideInitialPosition = 0.0055;
-constexpr float guideMaxPosition = 0.021;
-constexpr float leadScrewPitch = 0.002; //m per revolution
+constexpr double guideInitialPosition = 0.013;
+constexpr double guideMaxPosition = guideInitialPosition + spoolWidth; //m, maximum position of the filament guide, used for limit switch control and safety
+constexpr double leadScrewPitch = 0.004; //m per revolution
 constexpr float ApproachStepInterval = 1000.0; // microseconds between steps
-constexpr double stepsPerRevolution = stepsPerRev*microsteps;
 constexpr bool GUIDE_DIR_PIN_INVERTED = true; 
 
 // Ignore tiny near-zero speed noise when integrating traveled distance.
@@ -76,7 +77,6 @@ constexpr float STEPPER_MAX_ACCELERATION = 10000.0f;
 
 constexpr uint16_t GUIDE_TMC_RUN_CURRENT_MA = 1000;
 constexpr uint16_t GUIDE_TMC_HOLD_CURRENT_MA = 200;
-constexpr uint16_t GUIDE_TMC_MICROSTEPS = (uint16_t)(microsteps + 0.5f);
 constexpr float GUIDE_TMC_R_SENSE = 0.11f;
 
 // Stepper memory and timing variables
@@ -116,7 +116,7 @@ float SpoolMotorCurrent = 0.0; //mA, current measurement for spool motor
 
 //const double speedCal = 500.0 / 703.23f; 
 //constexpr double speedCal = 500.0 / 715.23f;
-constexpr double speedCal = 1; // calibration factor to convert from computed control signal to actual speed in m/s, based on empirical testing with the current setup
+constexpr double speedCal = 10.0/11.4; // calibration factor to convert from computed control signal to actual speed in m/s, based on empirical testing with the current setup
 
 // Smoothing factor for speed measurements
 constexpr float SpeedFilterAlpha = 0.001;
@@ -271,7 +271,11 @@ void setup() {
     pinSetup();
     Serial.println("Pins initialized.");
     initGuideTmcUart();
-    Serial.println("TMC2209 UART initialized for guide driver.");
+    Serial.print("TMC2209 UART initialized: ");
+    Serial.println(guideDriverUartReady ? "SUCCESS" : "FAIL");
+    microsteps = guideDriverUartReady ? microsteps : defaultMicrosteps; //default to 4 microsteps if UART init fails, which is the hardware default for the TMC2209
+    stepsPerRevolution = stepsPerRev * microsteps;
+
     initRaspberrySerial();
     Serial.println("Raspberry UART2 JSON link initialized.");
     initGuideStepper();
@@ -303,6 +307,7 @@ void setup() {
     encoderPrevTime = micros(); // Initialize encoder timestamp to current time
     lastEncoderPeriod = 100000; // Initialize to reasonable default period (~10 Hz) in microseconds
     lastDistanceUpdateMs = millis();
+    
 }
 
 void loop() {
@@ -478,6 +483,7 @@ void loop() {
 }
 
 void diagnose() {
+    verifyGuideDriverMicrosteps();
     Serial.print("Speed (mm/s): ");
     Serial.print(speed * 1000.0f, 2);
     Serial.print(", spd-PID(%): ");
@@ -488,9 +494,29 @@ void diagnose() {
     Serial.print(DiameterFeedforward/raspberryCommands.target_diameter_mm*1000.0f, 2); // diameter control feedforward term in mm/s
     Serial.print(", DiaPIDintegral: ");
     Serial.print(DiameterPID.getIntegral()*1000.0f, 2);
+    Serial.print(", GuidePos(mm): ");
+    Serial.print(guidePosition*1000.0f, 2);
+    Serial.print(", Layer: ");
+    Serial.print(layerNumber);
     Serial.println();
+
 }
 
+void verifyGuideDriverMicrosteps() {
+    if (!guideDriverUartReady) {
+        Serial.println("ERROR: TMC UART not ready");
+        return;
+    }
+    
+    uint32_t chopconf = guideDriver.CHOPCONF();
+    uint8_t mres = (chopconf >> 24) & 0x0F;  // mres is bits [27:24]
+    int microsteps = 256 >> mres;  // Convert mres to microsteps: 256, 128, 64, 32, 16, 8, 4, 2, 1
+    
+    Serial.print("TMC2209 CHOPCONF mres=");
+    Serial.print(mres);
+    Serial.print(", microsteps=");
+    Serial.println(microsteps);
+}
 
 /// @brief 
 /// @param setSpeed Desired speed for the roller motor in m/s, used to calculate the speed error for the PID controller.
@@ -553,11 +579,11 @@ void stepperControl(double filamentSpeedMps) {
     long currentPosition = guideStepper->getCurrentPosition();
 
     // Only count a layer when the guide has actually reached either endpoint.
-    if (!guideEndpointHandled && (currentPosition == 0 || currentPosition == guideMaxPositionSteps)) {
+    if (!guideEndpointHandled && (currentPosition <= 0 || currentPosition >= guideMaxPositionSteps)) {
         layerNumber++;
         guideEndpointHandled = true;
 
-        if (currentPosition == guideMaxPositionSteps) {
+        if (currentPosition >= guideMaxPositionSteps) {
             guideStepper->moveTo(0);
             guideMovingTowardMax = false;
         } else {
@@ -648,26 +674,38 @@ void updateLoadMode(unsigned long microsCurrent) {
 }
 
 void initGuideTmcUart() {
-    TMCSerial.begin(tmcBaud, SERIAL_8N1, tmcRx1Pin, tmcTx1Pin);
-    delay(50);
-
+    for (int i = 0; i < 3; i++) {
+        TMCSerial.begin(tmcBaud, SERIAL_8N1, tmcRx1Pin, tmcTx1Pin);
+        if (TMCSerial) {
+            Serial.println("TMCSerial UART initialized successfully.");
+            break;
+        } else {
+            Serial.println("TMCSerial UART initialization failed, retrying...");
+            delay(1000);
+        }
+    }
     guideDriver.begin();
+    for (int i = 0; i < 3; i++) {
+        uint8_t conn = guideDriver.test_connection();
+        guideDriverUartReady = (conn == 0);
+        if (guideDriverUartReady) {
+            Serial.print("Guide tmc2209 UART test_connection() = ");
+            Serial.println(conn);
+            break;
+        } else {
+            Serial.println("WARN: Guide tmc2209 UART not responding. Current/microstep commands may be ignored.");
+            delay(1000);
+            guideDriver.begin();
+        }
+    }
+
     guideDriver.pdn_disable(true);
     guideDriver.mstep_reg_select(true);
     guideDriver.I_scale_analog(false);
     guideDriver.toff(5);
     guideDriver.blank_time(24);
-    guideDriver.microsteps(GUIDE_TMC_MICROSTEPS);
+    guideDriver.microsteps((uint16_t)microsteps);
     guideDriver.pwm_autoscale(true);
-
-    uint8_t conn = guideDriver.test_connection();
-    guideDriverUartReady = (conn == 0);
-
-    Serial.print("Guide tmc2209 UART test_connection() = ");
-    Serial.println(conn);
-    if (!guideDriverUartReady) {
-        Serial.println("WARN: Guide tmc2209 UART not responding. Current/microstep commands may be ignored.");
-    }
 }
 
 void setGuideDriverCurrent(uint16_t currentmA) {
@@ -757,6 +795,7 @@ void syncGuidePositionFromStepper() {
         guidePosition += ((double)deltaSteps) * (leadScrewPitch / stepsPerRevolution);
         lastStepperPosSteps = currentPosSteps;
     }
+    //guidePosition = ((double)(currentPosSteps - guideInitialPosSteps)) * (leadScrewPitch / stepsPerRevolution);
 }
 
 void IRAM_ATTR StepperLimit(){
